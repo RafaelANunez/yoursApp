@@ -17,6 +17,11 @@ import {
 import Svg, { Path, Circle } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Contacts from 'expo-contacts';
+import * as Location from 'expo-location';
+import * as SMS from 'expo-sms'
+
+
+
 
 // --- SVG Icons (Converted for React Native) ---
 const MenuIcon = ({ color = '#555' }) => (
@@ -183,10 +188,10 @@ const ImportIcon = ({ color = '#555' }) => (
 );
 
 // --- Emergency Contacts Context ---
-const EmergencyContactsContext = createContext();
+const EmergencyContactsContext = React.createContext();
 
 const useEmergencyContacts = () => {
-  const context = useContext(EmergencyContactsContext);
+  const context = React.useContext(EmergencyContactsContext);
   if (!context) {
     throw new Error('useEmergencyContacts must be used within an EmergencyContactsProvider');
   }
@@ -194,12 +199,12 @@ const useEmergencyContacts = () => {
 };
 
 const EmergencyContactsProvider = ({ children }) => {
-  const [contacts, setContacts] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [contacts, setContacts] = React.useState([]);
+  const [isLoading, setIsLoading] = React.useState(true);
 
   const STORAGE_KEY = '@emergency_contacts';
 
-  useEffect(() => {
+  React.useEffect(() => {
     loadContacts();
   }, []);
 
@@ -340,22 +345,56 @@ const JournalPage = ({ onBack }) => (
 );
 
 const PanicPage = ({ onBack }) => {
-  let pressTimer;
+  const { contacts } = useEmergencyContacts();
+  const pressTimeout = React.useRef(null);
 
   const handlePressIn = () => {
-    pressTimer = setTimeout(() => {
-      // This is where you would trigger the actual emergency alert
-      // For now, it will just show a confirmation alert
-      Alert.alert(
-        "Emergency Alert",
-        "Your emergency contacts have been notified and your location has been shared.",
-        [{ text: "OK" }]
-      );
+    pressTimeout.current = setTimeout(() => {
+      triggerPanicAlert();
     }, 3000); // 3 seconds
   };
 
   const handlePressOut = () => {
-    clearTimeout(pressTimer);
+    if (pressTimeout.current) {
+      clearTimeout(pressTimeout.current);
+    }
+  };
+
+ 
+  const triggerPanicAlert = async () => {
+    if (contacts.length === 0) {
+      Alert.alert(
+        'No Emergency Contacts',
+        'Please add emergency contacts in the settings to use the panic button.'
+      );
+      return;
+    }
+    // 1. Get Location
+    let { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'Permission to access location was denied.');
+      return;
+    }
+    try {
+      let location = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = location.coords;
+
+      // 2. Prepare Message
+      const message = `Emergency! I need help. My current location is: https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+      const recipients = contacts.map(c => c.phone);
+
+      // 3. Send SMS
+      const isAvailable = await SMS.isAvailableAsync();
+      if (isAvailable) {
+        const { result } = await SMS.sendSMSAsync(recipients, message);
+        console.log('SMS sending result:', result);
+      } else {
+        Alert.alert('SMS Not Available', 'SMS is not available on this device.');
+      }
+    } catch (error) {
+      console.error("Failed to get location or send alert:", error);
+      Alert.alert('Error', 'Could not get your location or send SMS. Please try again.');
+    }
   };
 
   return (
@@ -367,6 +406,7 @@ const PanicPage = ({ onBack }) => {
           style={styles.sosButton}
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
+          activeOpacity={0.8}
         >
           <Text style={styles.sosButtonText}>SOS</Text>
         </TouchableOpacity>
@@ -375,7 +415,6 @@ const PanicPage = ({ onBack }) => {
     </View>
   );
 };
-
 
 const TimerPage = ({ onBack }) => (
   <View style={styles.fullPage}>
@@ -396,11 +435,11 @@ const SettingsPage = ({ onBack }) => (
 );
 
 const ContactFormModal = ({ visible, contact, onClose, onSave }) => {
-  const [name, setName] = useState(contact?.name || '');
-  const [phone, setPhone] = useState(contact?.phone || '');
-  const [relationship, setRelationship] = useState(contact?.relationship || '');
+  const [name, setName] = React.useState(contact?.name || '');
+  const [phone, setPhone] = React.useState(contact?.phone || '');
+  const [relationship, setRelationship] = React.useState(contact?.relationship || '');
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (contact) {
       setName(contact.name || '');
       setPhone(contact.phone || '');
@@ -469,12 +508,12 @@ const ContactFormModal = ({ visible, contact, onClose, onSave }) => {
 };
 
 const ContactImportModal = ({ visible, onClose }) => {
-  const [availableContacts, setAvailableContacts] = useState([]);
-  const [selectedContacts, setSelectedContacts] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [availableContacts, setAvailableContacts] = React.useState([]);
+  const [selectedContacts, setSelectedContacts] = React.useState([]);
+  const [isLoading, setIsLoading] = React.useState(false);
   const { addContact, importFromDevice } = useEmergencyContacts();
 
-  useEffect(() => {
+  React.useEffect(() => {
     if (visible) {
       loadDeviceContacts();
     }
@@ -577,9 +616,9 @@ const ContactImportModal = ({ visible, onClose }) => {
 
 const ContactsPage = ({ onBack }) => {
   const { contacts, isLoading, addContact, updateContact, deleteContact } = useEmergencyContacts();
-  const [formVisible, setFormVisible] = useState(false);
-  const [importVisible, setImportVisible] = useState(false);
-  const [editingContact, setEditingContact] = useState(null);
+  const [formVisible, setFormVisible] = React.useState(false);
+  const [importVisible, setImportVisible] = React.useState(false);
+  const [editingContact, setEditingContact] = React.useState(null);
 
   const handleAddContact = () => {
     setEditingContact(null);
@@ -720,8 +759,8 @@ const SideMenu = ({ isOpen, onClose, onNavigate }) => (
                 <CloseIcon />
             </TouchableOpacity>
             <View style={styles.profileContainer}>
-                <Image 
-                    source={{ uri: "https://placehold.co/100x100/F8C8DC/333333?text=User" }} 
+                <Image
+                    source={{ uri: "https://placehold.co/100x100/F8C8DC/333333?text=User" }}
                     style={styles.profileImage}
                 />
                 <Text style={styles.profileName}>Jessica Jones</Text>
@@ -729,7 +768,7 @@ const SideMenu = ({ isOpen, onClose, onNavigate }) => (
             <View style={styles.sideMenuNav}>
                 <TouchableOpacity style={styles.sideMenuLink} onPress={() => onNavigate('Contacts')}>
                     <ContactIcon color="#374151" />
-                    <Text style={styles.sideMenuLinkText}>Manage Emergency Contacts</Text>
+                    <Text style={styles.sideMenuLinkText}>Emergency Contacts</Text>
                 </TouchableOpacity>
             </View>
         </View>
@@ -738,9 +777,9 @@ const SideMenu = ({ isOpen, onClose, onNavigate }) => (
 );
 
 // --- Main App Component ---
-function AppContent() {
-  const [currentPage, setCurrentPage] = useState('Home');
-  const [isMenuOpen, setMenuOpen] = useState(false);
+export default function App() {
+  const [currentPage, setCurrentPage] = React.useState('Home');
+  const [isMenuOpen, setMenuOpen] = React.useState(false);
 
   const renderPage = () => {
     const goHome = () => setCurrentPage('Home');
@@ -762,44 +801,38 @@ function AppContent() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FEF2F2" />
-      {currentPage === 'Home' && <AppHeader onMenuPress={() => setMenuOpen(true)} title="Yours" />}
-
-      <View style={styles.contentArea}>
-        {renderPage()}
-      </View>
-
-      {currentPage === 'Home' && (
-        <View style={styles.bottomNav}>
-          <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Journal')}>
-            <JournalIcon />
-            <Text style={styles.navButtonText}>Journal</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Panic')}>
-            <AlertIcon />
-            <Text style={styles.navButtonText}>Panic</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Timer')}>
-            <TimerIcon />
-            <Text style={styles.navButtonText}>Timer</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Settings')}>
-            <SettingsIcon />
-            <Text style={styles.navButtonText}>Settings</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <SideMenu isOpen={isMenuOpen} onClose={() => setMenuOpen(false)} onNavigate={handleMenuNavigation}/>
-    </SafeAreaView>
-  );
-}
-
-export default function App() {
-  return (
     <EmergencyContactsProvider>
-      <AppContent />
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor="#FEF2F2" />
+        {currentPage === 'Home' && <AppHeader onMenuPress={() => setMenuOpen(true)} title="Yours" />}
+
+        <View style={styles.contentArea}>
+          {renderPage()}
+        </View>
+
+        {currentPage === 'Home' && (
+          <View style={styles.bottomNav}>
+            <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Journal')}>
+              <JournalIcon />
+              <Text style={styles.navButtonText}>Journal</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Panic')}>
+              <AlertIcon />
+              <Text style={styles.navButtonText}>Panic</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Timer')}>
+              <TimerIcon />
+              <Text style={styles.navButtonText}>Timer</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Settings')}>
+              <SettingsIcon />
+              <Text style={styles.navButtonText}>Settings</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <SideMenu isOpen={isMenuOpen} onClose={() => setMenuOpen(false)} onNavigate={handleMenuNavigation}/>
+      </SafeAreaView>
     </EmergencyContactsProvider>
   );
 }
@@ -981,50 +1014,49 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
   },
   sideMenuLinkText: {
     textAlign: 'left',
     fontSize: 18,
     color: '#374151',
+    marginLeft: 16,
   },
-  // Emergency Contacts Styles
+    // Contacts Page
   contactsContainer: {
     flex: 1,
-    padding: 16,
+    padding: 20,
   },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 32,
   },
   emptyStateText: {
+    marginTop: 16,
     fontSize: 18,
     fontWeight: '600',
     color: '#374151',
-    marginTop: 16,
-    marginBottom: 8,
   },
   emptyStateSubtext: {
+    marginTop: 4,
     fontSize: 14,
     color: '#6B7280',
     textAlign: 'center',
-    lineHeight: 20,
+    maxWidth: '80%',
   },
   contactItem: {
     backgroundColor: 'white',
-    borderRadius: 12,
     padding: 16,
-    marginBottom: 12,
+    borderRadius: 12,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
-    elevation: 1,
   },
   contactItemContent: {
     flexDirection: 'row',
@@ -1035,195 +1067,169 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#FDF2F8',
+    backgroundColor: '#FEF2F2',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 16,
   },
   contactDetails: {
     flex: 1,
   },
   contactItemName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: '#1F2937',
-    marginBottom: 2,
   },
   contactItemPhone: {
     fontSize: 14,
     color: '#6B7280',
-    marginBottom: 2,
+    marginTop: 2,
   },
   contactItemRelationship: {
     fontSize: 12,
     color: '#9CA3AF',
     fontStyle: 'italic',
+    marginTop: 2,
   },
   contactActions: {
     flexDirection: 'row',
-    gap: 8,
   },
   actionButton: {
     padding: 8,
-    borderRadius: 6,
-    backgroundColor: '#F9FAFB',
+    marginLeft: 8,
   },
   contactsActions: {
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
     marginTop: 16,
+    alignItems: 'center',
   },
   importButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#F3F4F6',
     paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    gap: 8,
   },
   importButtonText: {
-    fontSize: 14,
-    color: '#4B5563',
-    fontWeight: '500',
+    marginLeft: 8,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  // Modal Styles
+    // Modal & Form Styles
   modalContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.5)',
-    padding: 20,
   },
   formModal: {
+    width: '90%',
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 24,
-    width: '100%',
-    maxWidth: 400,
+    elevation: 10,
   },
   formTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#1F2937',
     marginBottom: 20,
     textAlign: 'center',
   },
   input: {
     borderWidth: 1,
     borderColor: '#D1D5DB',
+    padding: 12,
     borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
     marginBottom: 16,
-    backgroundColor: '#FFFFFF',
+    fontSize: 16,
   },
   formActions: {
     flexDirection: 'row',
-    gap: 12,
+    justifyContent: 'flex-end',
     marginTop: 8,
   },
   cancelButton: {
-    flex: 1,
     paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    alignItems: 'center',
+    paddingHorizontal: 20,
   },
   cancelButtonText: {
-    fontSize: 16,
     color: '#4B5563',
-  },
-  saveButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: '#F9A8D4',
-    alignItems: 'center',
-  },
-  saveButtonText: {
     fontSize: 16,
-    color: 'white',
     fontWeight: '600',
   },
-  disabledButton: {
-    backgroundColor: '#D1D5DB',
+  saveButton: {
+    backgroundColor: '#F472B6',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginLeft: 8,
   },
-  // Import Modal Styles
+  saveButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  disabledButton: {
+    backgroundColor: '#FBCFE8',
+  },
+
+  // Import Modal
   importModal: {
+    width: '90%',
+    height: '80%',
     backgroundColor: 'white',
     borderRadius: 12,
-    padding: 0,
-    width: '100%',
-    maxWidth: 400,
-    maxHeight: '80%',
+    padding: 20,
   },
   importHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    marginBottom: 16,
   },
   contactsList: {
-    maxHeight: 300,
+    flex: 1,
   },
   importContactItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#F9FAFB',
+    borderBottomColor: '#F3F4F6',
   },
   selectedContactItem: {
-    backgroundColor: '#FDF2F8',
+    backgroundColor: '#FEF2F2',
   },
   contactInfo: {
     flex: 1,
   },
   contactName: {
     fontSize: 16,
-    fontWeight: '500',
-    color: '#1F2937',
-    marginBottom: 2,
   },
   contactPhone: {
     fontSize: 14,
     color: '#6B7280',
   },
   checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     borderWidth: 2,
     borderColor: '#D1D5DB',
-    marginLeft: 12,
   },
   checkedBox: {
-    backgroundColor: '#F9A8D4',
-    borderColor: '#F9A8D4',
+    backgroundColor: '#F472B6',
+    borderColor: '#F472B6',
   },
   importActions: {
     flexDirection: 'row',
-    gap: 12,
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    justifyContent: 'flex-end',
+    marginTop: 16,
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center'
+  }
 });
