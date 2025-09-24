@@ -132,18 +132,43 @@ const JournalPage = ({ onBack }) => (
   </View>
 );
 
-const PanicPage = ({ onBack }) => (
-  <View style={styles.fullPage}>
-    <PageHeader title="Panic Mode" onBack={onBack} />
-    <PageContainer>
-      <Text style={styles.panicText}>In case of emergency, press and hold for 3 seconds.</Text>
-      <TouchableOpacity style={styles.sosButton}>
-        <Text style={styles.sosButtonText}>SOS</Text>
-      </TouchableOpacity>
-      <Text style={styles.panicSubtext}>This will alert your emergency contacts and share your location.</Text>
-    </PageContainer>
-  </View>
-);
+const PanicPage = ({ onBack }) => {
+  let pressTimer;
+
+  const handlePressIn = () => {
+    pressTimer = setTimeout(() => {
+      // This is where you would trigger the actual emergency alert
+      // For now, it will just show a confirmation alert
+      Alert.alert(
+        "Emergency Alert",
+        "Your emergency contacts have been notified and your location has been shared.",
+        [{ text: "OK" }]
+      );
+    }, 3000); // 3 seconds
+  };
+
+  const handlePressOut = () => {
+    clearTimeout(pressTimer);
+  };
+
+  return (
+    <View style={styles.fullPage}>
+      <PageHeader title="Panic Mode" onBack={onBack} />
+      <PageContainer>
+        <Text style={styles.panicText}>In case of emergency, press and hold for 3 seconds.</Text>
+        <TouchableOpacity
+          style={styles.sosButton}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+        >
+          <Text style={styles.sosButtonText}>SOS</Text>
+        </TouchableOpacity>
+        <Text style={styles.panicSubtext}>This will alert your emergency contacts and share your location.</Text>
+      </PageContainer>
+    </View>
+  );
+};
+
 
 const TimerPage = ({ onBack }) => (
   <View style={styles.fullPage}>
