@@ -1,4 +1,4 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -13,15 +13,13 @@ import {
   ScrollView,
   FlatList,
   Alert,
+  Animated,
 } from 'react-native';
 import Svg, { Path, Circle } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Contacts from 'expo-contacts';
 import * as Location from 'expo-location';
-import * as SMS from 'expo-sms'
-
-
-
+import * as SMS from 'expo-sms';
 
 
 
@@ -350,20 +348,37 @@ const JournalPage = ({ onBack }) => (
 const PanicPage = ({ onBack }) => {
   const { contacts } = useEmergencyContacts();
   const pressTimeout = React.useRef(null);
+  const scaleAnim = useRef(new Animated.Value(1)).current;
 
+  const pulseAnimation = Animated.loop(
+    Animated.sequence([
+      Animated.timing(scaleAnim, {
+        toValue: 1.1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+    ])
+  );
   const handlePressIn = () => {
+    pulseAnimation.start();
     pressTimeout.current = setTimeout(() => {
       triggerPanicAlert();
     }, 3000); // 3 seconds
   };
 
   const handlePressOut = () => {
+    pulseAnimation.stop();
+    scaleAnim.setValue(1);
     if (pressTimeout.current) {
       clearTimeout(pressTimeout.current);
     }
   };
 
- 
   const triggerPanicAlert = async () => {
     if (contacts.length === 0) {
       Alert.alert(
@@ -372,6 +387,7 @@ const PanicPage = ({ onBack }) => {
       );
       return;
     }
+
     // 1. Get Location
     let { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
@@ -405,14 +421,16 @@ const PanicPage = ({ onBack }) => {
       <PageHeader title="Panic Mode" onBack={onBack} />
       <PageContainer>
         <Text style={styles.panicText}>In case of emergency, press and hold for 3 seconds.</Text>
-        <TouchableOpacity
-          style={styles.sosButton}
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.sosButtonText}>SOS</Text>
-        </TouchableOpacity>
+        <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+          <TouchableOpacity
+            style={styles.sosButton}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.sosButtonText}>SOS</Text>
+          </TouchableOpacity>
+        </Animated.View>
         <Text style={styles.panicSubtext}>This will alert your emergency contacts and share your location.</Text>
       </PageContainer>
     </View>
