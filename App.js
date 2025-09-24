@@ -18,6 +18,9 @@ import Svg, { Path, Circle } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Contacts from 'expo-contacts';
 
+
+
+
 // --- SVG Icons (Converted for React Native) ---
 const MenuIcon = ({ color = '#555' }) => (
   <View style={{ width: 24, height: 24, justifyContent: 'space-around' }}>
@@ -339,43 +342,18 @@ const JournalPage = ({ onBack }) => (
   </View>
 );
 
-const PanicPage = ({ onBack }) => {
-  let pressTimer;
-
-  const handlePressIn = () => {
-    pressTimer = setTimeout(() => {
-      // This is where you would trigger the actual emergency alert
-      // For now, it will just show a confirmation alert
-      Alert.alert(
-        "Emergency Alert",
-        "Your emergency contacts have been notified and your location has been shared.",
-        [{ text: "OK" }]
-      );
-    }, 3000); // 3 seconds
-  };
-
-  const handlePressOut = () => {
-    clearTimeout(pressTimer);
-  };
-
-  return (
-    <View style={styles.fullPage}>
-      <PageHeader title="Panic Mode" onBack={onBack} />
-      <PageContainer>
-        <Text style={styles.panicText}>In case of emergency, press and hold for 3 seconds.</Text>
-        <TouchableOpacity
-          style={styles.sosButton}
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
-        >
-          <Text style={styles.sosButtonText}>SOS</Text>
-        </TouchableOpacity>
-        <Text style={styles.panicSubtext}>This will alert your emergency contacts and share your location.</Text>
-      </PageContainer>
-    </View>
-  );
-};
-
+const PanicPage = ({ onBack }) => (
+  <View style={styles.fullPage}>
+    <PageHeader title="Panic Mode" onBack={onBack} />
+    <PageContainer>
+      <Text style={styles.panicText}>In case of emergency, press and hold for 3 seconds.</Text>
+      <TouchableOpacity style={styles.sosButton}>
+        <Text style={styles.sosButtonText}>SOS</Text>
+      </TouchableOpacity>
+      <Text style={styles.panicSubtext}>This will alert your emergency contacts and share your location.</Text>
+    </PageContainer>
+  </View>
+);
 
 const TimerPage = ({ onBack }) => (
   <View style={styles.fullPage}>
@@ -729,7 +707,7 @@ const SideMenu = ({ isOpen, onClose, onNavigate }) => (
             <View style={styles.sideMenuNav}>
                 <TouchableOpacity style={styles.sideMenuLink} onPress={() => onNavigate('Contacts')}>
                     <ContactIcon color="#374151" />
-                    <Text style={styles.sideMenuLinkText}>Manage Emergency Contacts</Text>
+                    <Text style={styles.sideMenuLinkText}>Emergency Contacts</Text>
                 </TouchableOpacity>
             </View>
         </View>
@@ -738,7 +716,7 @@ const SideMenu = ({ isOpen, onClose, onNavigate }) => (
 );
 
 // --- Main App Component ---
-function AppContent() {
+export default function App() {
   const [currentPage, setCurrentPage] = useState('Home');
   const [isMenuOpen, setMenuOpen] = useState(false);
 
@@ -793,14 +771,6 @@ function AppContent() {
 
       <SideMenu isOpen={isMenuOpen} onClose={() => setMenuOpen(false)} onNavigate={handleMenuNavigation}/>
     </SafeAreaView>
-  );
-}
-
-export default function App() {
-  return (
-    <EmergencyContactsProvider>
-      <AppContent />
-    </EmergencyContactsProvider>
   );
 }
 
@@ -979,251 +949,10 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     paddingHorizontal: 8,
     borderRadius: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
   },
   sideMenuLinkText: {
     textAlign: 'left',
     fontSize: 18,
     color: '#374151',
-  },
-  // Emergency Contacts Styles
-  contactsContainer: {
-    flex: 1,
-    padding: 16,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-  },
-  emptyStateText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#374151',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  emptyStateSubtext: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  contactItem: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  contactItemContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  contactAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#FDF2F8',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  contactDetails: {
-    flex: 1,
-  },
-  contactItemName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 2,
-  },
-  contactItemPhone: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 2,
-  },
-  contactItemRelationship: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    fontStyle: 'italic',
-  },
-  contactActions: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  actionButton: {
-    padding: 8,
-    borderRadius: 6,
-    backgroundColor: '#F9FAFB',
-  },
-  contactsActions: {
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    marginTop: 16,
-  },
-  importButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F9FAFB',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    gap: 8,
-  },
-  importButtonText: {
-    fontSize: 14,
-    color: '#4B5563',
-    fontWeight: '500',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  // Modal Styles
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    padding: 20,
-  },
-  formModal: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-  },
-  formTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F2937',
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 16,
-    marginBottom: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  formActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
-  },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    color: '#4B5563',
-  },
-  saveButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: '#F9A8D4',
-    alignItems: 'center',
-  },
-  saveButtonText: {
-    fontSize: 16,
-    color: 'white',
-    fontWeight: '600',
-  },
-  disabledButton: {
-    backgroundColor: '#D1D5DB',
-  },
-  // Import Modal Styles
-  importModal: {
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 0,
-    width: '100%',
-    maxWidth: 400,
-    maxHeight: '80%',
-  },
-  importHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  contactsList: {
-    maxHeight: 300,
-  },
-  importContactItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F9FAFB',
-  },
-  selectedContactItem: {
-    backgroundColor: '#FDF2F8',
-  },
-  contactInfo: {
-    flex: 1,
-  },
-  contactName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#1F2937',
-    marginBottom: 2,
-  },
-  contactPhone: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: '#D1D5DB',
-    marginLeft: 12,
-  },
-  checkedBox: {
-    backgroundColor: '#F9A8D4',
-    borderColor: '#F9A8D4',
-  },
-  importActions: {
-    flexDirection: 'row',
-    gap: 12,
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
   },
 });
