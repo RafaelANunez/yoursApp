@@ -1,4 +1,6 @@
 import React, { useRef, useEffect, useState } from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import AppNavigator from './src/navigation/AppNav';
 import {
   StyleSheet,
   Text,
@@ -21,13 +23,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Contacts from 'expo-contacts';
 import * as Location from 'expo-location';
 import * as SMS from 'expo-sms';
+import LoginScreen from './screens/LoginScreen';
+import HomeScreen from './screens/HomeScreen';
 /*
 //nai added a navigation container to handle multiple pages smoother in the future
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-import LoginScreen from './screens/LoginScreen';
-//import HomeScreen from './screens/HomeScreen';
+
 
 const Stack = createNativeStackNavigator();
 
@@ -41,127 +44,6 @@ export default function App() {
     </NavigationContainer>
   );
 }*/
-//end add
-
-//begin add
-//import React, { useState } from 'react';
-//import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
-
-const SignUp = ({ onSignUpSuccess, onGoToLogin }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-
-  const handleSignUp = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please enter email and password');
-      return;
-    }
-
-    if (password.length < 6) {
-      Alert.alert('Error', 'Password must be at least 6 characters');
-      return;
-    }
-
-    try {
-      // Save user credentials locally (simple example)
-      await AsyncStorage.setItem('userEmail', email);
-      await AsyncStorage.setItem('userPassword', password); // Insecure - for demo only!
-      await AsyncStorage.setItem('isLoggedIn', 'true');
-
-      Alert.alert('Success', 'Account created!');
-      onSignUpSuccess();
-    } catch (e) {
-      console.error('Error saving user data', e);
-      Alert.alert('Error', 'Failed to create account');
-    }
-  };
-
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Sign Up</Text>
-      <TextInput
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        style={styles.input}
-        autoCapitalize="none"
-        keyboardType="email-address"
-      />
-      <TextInput
-        placeholder="Password"
-        value={password}
-        onChangeText={setPassword}
-        style={styles.input}
-        secureTextEntry
-      />
-      <Button title="Create Account" onPress={handleSignUp} />
-      <Button title="Back to Login" onPress={onGoToLogin} />
-    </View>
-  );
-};
-
-export const LoginPage = ({ onLoginSuccess }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-
-  const handleLogin = async () => {
-    if (email === 'test@example.com' && password === 'password') {
-      try {
-        await AsyncStorage.setItem('userEmail', email);
-        await AsyncStorage.setItem('isLoggedIn', 'true');
-        onLoginSuccess();
-      } catch (e) {
-        console.error(e);
-      }
-    } else {
-      Alert.alert('Login Failed', 'Invalid credentials');
-    }
-  };
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Login</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
-      <Button title="Login" onPress={handleLogin} />
-    </View>
-  );
-};
-
-const handleLogout = async () => {
-  try {
-    await AsyncStorage.removeItem('userEmail');
-    await AsyncStorage.removeItem('userPassword');
-    await AsyncStorage.setItem('isLoggedIn', 'false');
-    setCurrentPage('Login');
-  } catch (e) {
-    console.error('Error during logout', e);
-  }
-};
-
-const loginstyles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 20 },
-  title: { fontSize: 24, marginBottom: 20, textAlign: 'center' },
-  input: {
-    height: 50,
-    borderColor: '#ccc',
-    borderWidth: 1,
-    borderRadius: 5,
-    paddingHorizontal: 10,
-    marginBottom: 15,
-  },
-});
 //end add
 
 // --- SVG Icons (Converted for React Native) ---
@@ -944,11 +826,12 @@ const SideMenu = ({ isOpen, onClose, onNavigate }) => (
 
 // --- Main App Component ---
 export default function App() {
-  const [currentPage, setCurrentPage] = React.useState('SignUp'); //changed default page to login
+  /*const [currentPage, setCurrentPage] = React.useState('SignUp'); //changed default page to login
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
   const [isMenuOpen, setMenuOpen] = React.useState(false);
+  */
 
   /*<NavigationContainer>
       <Stack.Navigator initialRouteName="Login">
@@ -956,7 +839,7 @@ export default function App() {
       </Stack.Navigator>
     </NavigationContainer>
 */
-  const renderPage = () => {
+  /*const renderPage = () => {
     const goHome = () => setCurrentPage('Home');
 
     switch (currentPage) {
@@ -966,9 +849,6 @@ export default function App() {
       case 'Timer': return <TimerPage onBack={goHome} />;
       case 'Settings': return <SettingsPage onBack={goHome} />;
       case 'Contacts': return <ContactsPage onBack={goHome} />;
-      case 'SignUp': return <SignUp onSignUpSuccess={goHome}/>
-      case 'Home': return <HomePage onLogout={handleLogout} />;
-      //case 'LogOut': return <
       default: return <HomePage />;
     }
   };
@@ -983,7 +863,7 @@ export default function App() {
     setCurrentPage(page);
   }
   };
-
+*/
   return (
     <EmergencyContactsProvider>
       <SafeAreaView style={styles.container}>
