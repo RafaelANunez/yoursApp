@@ -11,6 +11,7 @@ import {
   Pressable,
   TextInput,
   ScrollView,
+  SectionList,
   FlatList,
   Alert,
   Animated,
@@ -188,6 +189,157 @@ const ImportIcon = ({ color = '#555' }) => (
   </Svg>
 );
 
+// --- Autofill Context ---
+const AutofillContext = React.createContext();
+
+const useAutofill = () => {
+  const context = React.useContext(AutofillContext);
+  if (!context) {
+    throw new Error('useAutofill must be used within an AutofillProvider');
+  }
+  return context;
+};
+
+const AutofillProvider = ({ children }) => {
+  const [people, setPeople] = React.useState([]);
+  const [locations, setLocations] = React.useState([]);
+
+  const PEOPLE_STORAGE_KEY = '@autofill_people';
+  const LOCATIONS_STORAGE_KEY = '@autofill_locations';
+
+  React.useEffect(() => {
+    loadAutofillData();
+  }, []);
+
+  const loadAutofillData = async () => {
+    try {
+      const storedPeople = await AsyncStorage.getItem(PEOPLE_STORAGE_KEY);
+      if (storedPeople) setPeople(JSON.parse(storedPeople));
+      const storedLocations = await AsyncStorage.getItem(LOCATIONS_STORAGE_KEY);
+      if (storedLocations) setLocations(JSON.parse(storedLocations));
+    } catch (error) {
+      console.error('Error loading autofill data:', error);
+    }
+  };
+
+  const addPerson = async ({ name, relationship }) => {
+    if (!name) return;
+    const updatedPeople = [...people];
+    const existingPerson = updatedPeople.find(p => p.name.toLowerCase() === name.toLowerCase());
+    if (existingPerson) {
+      if (relationship && !existingPerson.relationships.includes(relationship)) {
+        existingPerson.relationships.push(relationship);
+      }
+    } else {
+      updatedPeople.push({ name, relationships: relationship ? [relationship] : [] });
+    }
+    await AsyncStorage.setItem(PEOPLE_STORAGE_KEY, JSON.stringify(updatedPeople));
+    setPeople(updatedPeople);
+  };
+
+  const addLocation = async (location) => {
+    if (!location || locations.includes(location)) return;
+    const updatedLocations = [...locations, location];
+    await AsyncStorage.setItem(LOCATIONS_STORAGE_KEY, JSON.stringify(updatedLocations));
+    setLocations(updatedLocations);
+  };
+
+  const value = { people, locations, addPerson, addLocation };
+
+  return (
+    <AutofillContext.Provider value={value}>
+      {children}
+    </AutofillContext.Provider>
+  );
+};
+
+
+// --- Journal Context ---
+const JournalContext = React.createContext();
+
+const useJournal = () => {
+  const context = React.useContext(JournalContext);
+  if (!context) {
+    throw new Error('useJournal must be used within a JournalProvider');
+  }
+  return context;
+};
+
+const JournalProvider = ({ children }) => {
+  const [entries, setEntries] = React.useState([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  const STORAGE_KEY = '@journal_entries';
+
+  React.useEffect(() => {
+    loadEntries();
+  }, []);
+
+  const loadEntries = async () => {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        setEntries(JSON.parse(stored));
+      }
+    } catch (error) {
+      console.error('Error loading journal entries:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const saveEntries = async (newEntries) => {
+    try {
+      // Sort by date before saving
+      const sortedEntries = newEntries.sort((a, b) => new Date(b.date) - new Date(a.date));
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sortedEntries));
+      setEntries(sortedEntries);
+    } catch (error) {
+      console.error('Error saving journal entries:', error);
+      throw error;
+    }
+  };
+
+  const addEntry = async (entry) => {
+    const newEntry = {
+      id: Date.now().toString(),
+      ...entry,
+      date: entry.date || new Date().toISOString(), // Use provided date or now
+    };
+    const updatedEntries = [...entries, newEntry];
+    await saveEntries(updatedEntries);
+  };
+
+  const updateEntry = async (id, updatedEntry) => {
+    const updatedEntries = entries.map((entry) =>
+      entry.id === id
+        ? { ...entry, ...updatedEntry, updatedAt: new Date().toISOString() }
+        : entry
+    );
+    await saveEntries(updatedEntries);
+  };
+
+  const deleteEntry = async (id) => {
+    const updatedEntries = entries.filter((entry) => entry.id !== id);
+    await saveEntries(updatedEntries);
+  };
+
+  const value = {
+    entries,
+    isLoading,
+    addEntry,
+    updateEntry,
+    deleteEntry,
+  };
+
+  return (
+    <JournalContext.Provider value={value}>
+      {children}
+    </JournalContext.Provider>
+  );
+};
+
+
 // --- Emergency Contacts Context ---
 const EmergencyContactsContext = React.createContext();
 
@@ -333,17 +485,524 @@ const HomePage = () => (
   </PageContainer>
 );
 
-const JournalPage = ({ onBack }) => (
-  <View style={styles.fullPage}>
-    <PageHeader title="My Journal" onBack={onBack} />
-    <PageContainer>
-      <Text style={styles.pageText}>Your journal entries will appear here.</Text>
-      <TouchableOpacity style={styles.floatingActionButton}>
+const JournalTemplateModal = ({ visible, onClose, onSelectTemplate }) => (
+  <Modal visible={visible} animationType="slide" transparent={true} onRequestClose={onClose}>
+    <View style={styles.modalContainer}>
+      <View style={styles.templateModal}>
+        <Text style={styles.formTitle}>New Journal Entry</Text>
+        <Text style={styles.templateSubtitle}>Select a template to get started:</Text>
+
+        <TouchableOpacity style={styles.templateButton} onPress={() => onSelectTemplate('incident')}>
+          <Text style={styles.templateButtonText}>Incident Report</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.templateButton} onPress={() => onSelectTemplate('journey')}>
+          <Text style={styles.templateButtonText}>Returning from Point A to B</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.templateButton} onPress={() => onSelectTemplate('meeting')}>
+          <Text style={styles.templateButtonText}>Meeting with a Person</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.templateButton} onPress={() => onSelectTemplate('interaction')}>
+          <Text style={styles.templateButtonText}>Interaction with a Person</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.templateButton} onPress={() => onSelectTemplate('blank')}>
+          <Text style={styles.templateButtonText}>Blank Entry</Text>
+        </TouchableOpacity>
+
+        <View style={styles.formActions}>
+          <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+            <Text style={styles.cancelButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
+  </Modal>
+);
+
+const IncidentReportForm = ({ visible, entry, onClose, onSave }) => {
+  const { people, locations, addPerson, addLocation } = useAutofill();
+  const [incidentDate, setIncidentDate] = React.useState(new Date());
+  const [personName, setPersonName] = React.useState('');
+  const [relationship, setRelationship] = React.useState('');
+  const [location, setLocation] = React.useState('');
+  const [incidentType, setIncidentType] = React.useState('');
+  const [severity, setSeverity] = React.useState('regular');
+  const [description, setDescription] = React.useState('');
+
+  const [nameSuggestions, setNameSuggestions] = React.useState([]);
+  const [locationSuggestions, setLocationSuggestions] = React.useState([]);
+
+  const incidentTypes = [
+    'Physical altercation', 'Verbal conflict', 'Bullying or harassment',
+    'Vandalism', 'Safety violation', 'Other'
+  ];
+  const severityLevels = {
+    danger: { color: '#FECACA', name: 'Danger' }, // red-200
+    warning: { color: '#FEF08A', name: 'Warning' }, // yellow-200
+    suspicious: { color: '#E5E7EB', name: 'Suspicious' }, // gray-200
+    regular: { color: 'white', name: 'Regular Note' },
+  };
+
+  React.useEffect(() => {
+    if (entry) {
+      setIncidentDate(new Date(entry.date));
+      setPersonName(entry.personName || '');
+      setRelationship(entry.relationship || '');
+      setLocation(entry.location || '');
+      setIncidentType(entry.incidentType || '');
+      setSeverity(entry.severity || 'regular');
+      setDescription(entry.description || '');
+    } else {
+      // Reset form
+      setIncidentDate(new Date());
+      setPersonName('');
+      setRelationship('');
+      setLocation('');
+      setIncidentType('');
+      setSeverity('regular');
+      setDescription('');
+    }
+  }, [entry, visible]);
+  
+  const handleNameChange = (text) => {
+    setPersonName(text);
+    if (text.length > 1) {
+      const filtered = people.filter(p => p.name.toLowerCase().includes(text.toLowerCase()));
+      setNameSuggestions(filtered);
+    } else {
+      setNameSuggestions([]);
+    }
+  };
+  
+  const handleLocationChange = (text) => {
+      setLocation(text);
+      if (text.length > 1) {
+          const filtered = locations.filter(l => l.toLowerCase().includes(text.toLowerCase()));
+          setLocationSuggestions(filtered)
+      } else {
+          setLocationSuggestions([]);
+      }
+  }
+
+  const handleSave = () => {
+    if (!personName.trim() || !incidentType) {
+      Alert.alert('Required Fields', 'Please fill in the person\'s name and the type of incident.');
+      return;
+    }
+    const reportData = {
+      title: `Incident with ${personName}`,
+      date: incidentDate.toISOString(),
+      personName: personName.trim(),
+      relationship: relationship.trim(),
+      location: location.trim(),
+      incidentType,
+      severity,
+      description: description.trim(),
+      isIncidentReport: true,
+    };
+    onSave(reportData);
+    // Add to autofill
+    addPerson({ name: reportData.personName, relationship: reportData.relationship });
+    addLocation(reportData.location);
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent={true}>
+      <View style={styles.modalContainer}>
+        <ScrollView style={{width: '100%'}} contentContainerStyle={{ justifyContent: 'center', alignItems: 'center', flexGrow: 1}}>
+          <View style={styles.formModal}>
+            <Text style={styles.formTitle}>
+              {entry ? 'Edit Incident Report' : 'New Incident Report'}
+            </Text>
+
+            <Text style={styles.label}>Date of Incident</Text>
+            {/* Basic text input for date for simplicity. A date picker would be better in a real app */}
+            <TextInput
+              style={styles.input}
+              value={incidentDate.toLocaleDateString()}
+              onChangeText={(text) => setIncidentDate(new Date(text))}
+              placeholder="MM/DD/YYYY"
+            />
+
+            <Text style={styles.label}>Full Name of Person</Text>
+            <TextInput style={styles.input} placeholder="e.g., John Doe" value={personName} onChangeText={handleNameChange} />
+             {nameSuggestions.length > 0 && (
+                <View style={styles.suggestionsContainer}>
+                    {nameSuggestions.map((p, i) => (
+                        <TouchableOpacity key={i} style={styles.suggestionItem} onPress={() => {
+                            setPersonName(p.name);
+                            if(p.relationships.length > 0) setRelationship(p.relationships[0])
+                            setNameSuggestions([]);
+                        }}>
+                           <Text>{p.name}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            )}
+
+            <Text style={styles.label}>Relationship to Person</Text>
+            <TextInput style={styles.input} placeholder="e.g., Neighbor, Colleague" value={relationship} onChangeText={setRelationship} />
+
+            <Text style={styles.label}>Location of Incident</Text>
+            <TextInput style={styles.input} placeholder="e.g., 123 Main St, Anytown" value={location} onChangeText={handleLocationChange} />
+            {locationSuggestions.length > 0 && (
+                <View style={styles.suggestionsContainer}>
+                    {locationSuggestions.map((l, i) => (
+                        <TouchableOpacity key={i} style={styles.suggestionItem} onPress={() => {
+                            setLocation(l);
+                            setLocationSuggestions([]);
+                        }}>
+                           <Text>{l}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            )}
+
+            <Text style={styles.label}>Type of Incident</Text>
+            <View style={styles.pickerContainer}>
+                {incidentTypes.map(type => (
+                    <TouchableOpacity
+                        key={type}
+                        style={[styles.pickerButton, incidentType === type && styles.pickerButtonSelected]}
+                        onPress={() => setIncidentType(type)}
+                    >
+                        <Text style={styles.pickerButtonText}>{type}</Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+
+            <Text style={styles.label}>Severity Level</Text>
+             <View style={styles.pickerContainer}>
+                {Object.keys(severityLevels).map(level => (
+                    <TouchableOpacity
+                        key={level}
+                        style={[
+                          styles.pickerButton,
+                          { backgroundColor: severityLevels[level].color, borderWidth: 1, borderColor: '#D1D5DB' },
+                          severity === level && styles.pickerButtonSelected
+                        ]}
+                        onPress={() => setSeverity(level)}
+                    >
+                        <Text style={styles.pickerButtonText}>{severityLevels[level].name}</Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+
+
+            <Text style={styles.label}>Description of Incident</Text>
+            <TextInput
+              style={[styles.input, { height: 150, textAlignVertical: 'top' }]}
+              placeholder="Describe what happened..."
+              value={description}
+              onChangeText={setDescription}
+              multiline={true}
+            />
+
+            <View style={styles.formActions}>
+              <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+                <Text style={styles.saveButtonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
+};
+
+
+const JournalEntryForm = ({ visible, entry, onClose, onSave, templateData }) => {
+  const [title, setTitle] = React.useState('');
+  const [notes, setNotes] = React.useState('');
+
+  React.useEffect(() => {
+    if (entry) {
+      setTitle(entry.title || '');
+      setNotes(entry.notes || '');
+    } else if (templateData) {
+      setTitle(templateData.title);
+      setNotes(templateData.notes);
+    } else {
+      setTitle('');
+      setNotes('');
+    }
+  }, [entry, templateData, visible]);
+
+  const handleSave = () => {
+    if (!title.trim()) {
+      Alert.alert('Title Required', 'Please provide a title for your entry.');
+      return;
+    }
+    onSave({ title: title.trim(), notes: notes.trim() });
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent={true}>
+      <View style={styles.modalContainer}>
+        <View style={styles.formModal}>
+          <Text style={styles.formTitle}>
+            {entry ? 'Edit Journal Entry' : 'New Journal Entry'}
+          </Text>
+
+          <TextInput
+            style={styles.input}
+            placeholder="Title"
+            value={title}
+            onChangeText={setTitle}
+            maxLength={100}
+          />
+
+          <TextInput
+            style={[styles.input, { height: 200, textAlignVertical: 'top' }]}
+            placeholder="Add notes..."
+            value={notes}
+            onChangeText={setNotes}
+            multiline={true}
+          />
+
+          <View style={styles.formActions}>
+            <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+              <Text style={styles.saveButtonText}>Save</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
+const JournalPage = ({ onBack }) => {
+  const { entries, isLoading, addEntry, updateEntry, deleteEntry } = useJournal();
+  const [formVisible, setFormVisible] = React.useState(false);
+  const [incidentFormVisible, setIncidentFormVisible] = React.useState(false);
+  const [templateModalVisible, setTemplateModalVisible] = React.useState(false);
+  const [editingEntry, setEditingEntry] = React.useState(null);
+  const [templateData, setTemplateData] = React.useState(null);
+
+  const groupedEntries = React.useMemo(() => {
+    if (isLoading || entries.length === 0) return [];
+    
+    const groups = entries.reduce((acc, entry) => {
+      const date = new Date(entry.date).toLocaleDateString(undefined, {
+        year: 'numeric', month: 'long', day: 'numeric'
+      });
+      if (!acc[date]) {
+        acc[date] = [];
+      }
+      acc[date].push(entry);
+      return acc;
+    }, {});
+
+    return Object.keys(groups).map(date => ({
+      title: date,
+      data: groups[date]
+    }));
+  }, [entries, isLoading]);
+
+  const handleAddEntry = () => {
+    setEditingEntry(null);
+    setTemplateData(null);
+    setTemplateModalVisible(true);
+  };
+
+  const handleSelectTemplate = (templateType) => {
+    setTemplateModalVisible(false);
+
+    if (templateType === 'incident') {
+      setEditingEntry(null);
+      setIncidentFormVisible(true);
+      return;
+    }
+
+    let data = { title: '', notes: '' };
+    switch (templateType) {
+      case 'journey':
+        data = {
+          title: 'Journey Log',
+          notes: 'From: [Point A]\nTo: [Point B]\n\nNotes:\n',
+        };
+        break;
+      case 'meeting':
+        data = {
+          title: 'Meeting Log',
+          notes: 'Met with: [Person\'s Name]\nLocation: [Location]\n\nNotes:\n',
+        };
+        break;
+      case 'interaction':
+        data = {
+          title: 'Interaction Log',
+          notes: 'Interaction with: [Person\'s Name]\nOutcome: [Good/Mild/Bad]\n\nNotes:\n',
+        };
+        break;
+      default: // blank
+        break;
+    }
+    setTemplateData(data);
+    setFormVisible(true);
+  };
+
+  const handleEditEntry = (entry) => {
+    setEditingEntry(entry);
+    if (entry.isIncidentReport) {
+      setIncidentFormVisible(true);
+    } else {
+      setTemplateData(null);
+      setFormVisible(true);
+    }
+  };
+
+  const handleSaveEntry = async (entryData) => {
+    try {
+      if (editingEntry) {
+        await updateEntry(editingEntry.id, entryData);
+      } else {
+        await addEntry(entryData);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save the journal entry.');
+    } finally {
+        setFormVisible(false);
+        setIncidentFormVisible(false);
+    }
+  };
+
+  const handleDeleteEntry = (entry) => {
+    Alert.alert(
+      'Delete Entry',
+      `Are you sure you want to delete "${entry.title}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteEntry(entry.id),
+        },
+      ]
+    );
+  };
+  
+  const getSeverityColor = (severity) => {
+      const colors = {
+        danger: '#FECACA',
+        warning: '#FEF08A',
+        suspicious: '#E5E7EB',
+        regular: 'white'
+      };
+      return colors[severity] || 'white';
+  }
+
+  if (isLoading) {
+    return (
+      <View style={styles.fullPage}>
+        <PageHeader title="My Journal" onBack={onBack} />
+        <View style={styles.loadingContainer}>
+          <Text>Loading journal...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  const renderJournalItem = ({ item }) => (
+      <View style={[styles.journalItem, {backgroundColor: getSeverityColor(item.severity)}]}>
+        <View style={styles.journalItemContent}>
+          <Text style={styles.journalItemTitle}>{item.title}</Text>
+          <Text style={styles.journalItemDate}>
+            {new Date(item.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+           {item.isIncidentReport ? (
+              <>
+                <Text style={styles.incidentDetail}><Text style={{fontWeight: 'bold'}}>Person: </Text>{item.personName} ({item.relationship})</Text>
+                <Text style={styles.incidentDetail}><Text style={{fontWeight: 'bold'}}>Location: </Text>{item.location}</Text>
+                <Text style={styles.incidentDetail}><Text style={{fontWeight: 'bold'}}>Incident: </Text>{item.incidentType}</Text>
+                <Text style={styles.journalItemNotes} numberOfLines={3}>{item.description}</Text>
+              </>
+           ) : (
+              <Text style={styles.journalItemNotes} numberOfLines={3}>{item.notes}</Text>
+           )}
+
+        </View>
+        <View style={styles.journalActions}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleEditEntry(item)}
+          >
+            <EditIcon />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => handleDeleteEntry(item)}
+          >
+            <DeleteIcon />
+          </TouchableOpacity>
+        </View>
+      </View>
+  )
+
+  return (
+    <View style={styles.fullPage}>
+      <PageHeader title="My Journal" onBack={onBack} />
+
+      <View style={styles.journalContainer}>
+        {entries.length === 0 ? (
+          <View style={styles.emptyState}>
+            <JournalIcon color="#D1D5DB" />
+            <Text style={styles.emptyStateText}>Your journal is empty</Text>
+            <Text style={styles.emptyStateSubtext}>
+              Create your first entry to log incidents and keep a timeline of events.
+            </Text>
+          </View>
+        ) : (
+          <SectionList
+            sections={groupedEntries}
+            keyExtractor={(item) => item.id}
+            renderItem={renderJournalItem}
+            renderSectionHeader={({ section: { title } }) => (
+                <Text style={styles.sectionHeader}>{title}</Text>
+            )}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+      </View>
+
+      <TouchableOpacity style={styles.floatingActionButton} onPress={handleAddEntry}>
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
-    </PageContainer>
-  </View>
-);
+
+      <JournalTemplateModal
+        visible={templateModalVisible}
+        onClose={() => setTemplateModalVisible(false)}
+        onSelectTemplate={handleSelectTemplate}
+      />
+
+      <JournalEntryForm
+        visible={formVisible}
+        entry={editingEntry}
+        templateData={templateData}
+        onClose={() => setFormVisible(false)}
+        onSave={handleSaveEntry}
+      />
+
+      <IncidentReportForm
+        visible={incidentFormVisible}
+        entry={editingEntry}
+        onClose={() => setIncidentFormVisible(false)}
+        onSave={handleSaveEntry}
+      />
+    </View>
+  );
+};
+
 
 const PanicPage = ({ onBack }) => {
   const { contacts } = useEmergencyContacts();
@@ -822,39 +1481,43 @@ export default function App() {
   };
 
   return (
-    <EmergencyContactsProvider>
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="#FEF2F2" />
-        {currentPage === 'Home' && <AppHeader onMenuPress={() => setMenuOpen(true)} title="Yours" />}
+    <AutofillProvider>
+        <EmergencyContactsProvider>
+          <JournalProvider>
+            <SafeAreaView style={styles.container}>
+              <StatusBar barStyle="dark-content" backgroundColor="#FEF2F2" />
+              {currentPage === 'Home' && <AppHeader onMenuPress={() => setMenuOpen(true)} title="Yours" />}
 
-        <View style={styles.contentArea}>
-          {renderPage()}
-        </View>
+              <View style={styles.contentArea}>
+                {renderPage()}
+              </View>
 
-        {currentPage === 'Home' && (
-          <View style={styles.bottomNav}>
-            <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Journal')}>
-              <JournalIcon />
-              <Text style={styles.navButtonText}>Journal</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Panic')}>
-              <AlertIcon />
-              <Text style={styles.navButtonText}>Panic</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Timer')}>
-              <TimerIcon />
-              <Text style={styles.navButtonText}>Timer</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Settings')}>
-              <SettingsIcon />
-              <Text style={styles.navButtonText}>Settings</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+              {currentPage === 'Home' && (
+                <View style={styles.bottomNav}>
+                  <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Journal')}>
+                    <JournalIcon />
+                    <Text style={styles.navButtonText}>Journal</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Panic')}>
+                    <AlertIcon />
+                    <Text style={styles.navButtonText}>Panic</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Timer')}>
+                    <TimerIcon />
+                    <Text style={styles.navButtonText}>Timer</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Settings')}>
+                    <SettingsIcon />
+                    <Text style={styles.navButtonText}>Settings</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
-        <SideMenu isOpen={isMenuOpen} onClose={() => setMenuOpen(false)} onNavigate={handleMenuNavigation}/>
-      </SafeAreaView>
-    </EmergencyContactsProvider>
+              <SideMenu isOpen={isMenuOpen} onClose={() => setMenuOpen(false)} onNavigate={handleMenuNavigation}/>
+            </SafeAreaView>
+          </JournalProvider>
+        </EmergencyContactsProvider>
+    </AutofillProvider>
   );
 }
 
@@ -1165,6 +1828,48 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     fontSize: 16,
   },
+  label: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: '#374151',
+      marginBottom: 6,
+  },
+  pickerContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'flex-start',
+      gap: 8,
+      marginBottom: 16,
+  },
+  pickerButton: {
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: '#D1D5DB',
+      alignItems: 'center',
+  },
+  pickerButtonSelected: {
+      borderColor: '#F472B6',
+      borderWidth: 2,
+  },
+  pickerButtonText: {
+      fontSize: 14,
+      color: '#374151'
+  },
+  suggestionsContainer: {
+      backgroundColor: '#F9FAFB',
+      borderRadius: 8,
+      marginTop: -12,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: '#E5E7EB'
+  },
+  suggestionItem: {
+      padding: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: '#E5E7EB'
+  },
   formActions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -1252,5 +1957,86 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center'
-  }
+  },
+  // Journal Page
+  journalContainer: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
+  sectionHeader: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: '#1F2937',
+      backgroundColor: '#FFF8F8',
+      paddingTop: 16,
+      paddingBottom: 8,
+  },
+  journalItem: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  journalItemContent: {
+    flex: 1,
+  },
+  journalItemTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  journalItemDate: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 8,
+  },
+  journalItemNotes: {
+    fontSize: 14,
+    color: '#4B5563',
+    lineHeight: 20,
+    marginTop: 4,
+  },
+  incidentDetail: {
+      fontSize: 14,
+      color: '#4B5563',
+      marginBottom: 2,
+  },
+  journalActions: {
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    marginLeft: 16,
+  },
+  // Template Modal
+  templateModal: {
+    width: '90%',
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 24,
+    elevation: 10,
+  },
+  templateSubtitle: {
+    fontSize: 16,
+    color: '#4B5563',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  templateButton: {
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 16,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  templateButtonText: {
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#374151',
+  },
 });
