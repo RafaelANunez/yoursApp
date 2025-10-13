@@ -130,6 +130,19 @@ const PhoneIcon = ({ color = '#555' }) => (
   </Svg>
 );
 
+const EyeOffIcon = ({ color = '#555' }) => (
+  <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M17.94 17.94C16.2306 19.243 14.1491 19.9649 12 20C5 20 1 12 1 12C2.24389 9.68192 3.96914 7.65663 6.06 6.06M9.9 4.24C10.5883 4.0789 11.2931 3.99836 12 4C19 4 23 12 23 12C22.393 13.1356 21.6691 14.2048 20.84 15.19M14.12 14.12C13.8454 14.4148 13.5141 14.6512 13.1462 14.8151C12.7782 14.9791 12.3809 15.0673 11.9781 15.0744C11.5753 15.0815 11.1752 15.0074 10.8016 14.8565C10.4281 14.7056 10.0887 14.4811 9.80385 14.1962C9.51897 13.9113 9.29439 13.5719 9.14351 13.1984C8.99262 12.8248 8.91853 12.4247 8.92563 12.0219C8.93274 11.6191 9.02091 11.2218 9.18488 10.8538C9.34884 10.4859 9.58525 10.1546 9.88 9.88"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <Path d="M1 1L23 23" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+
 const EditIcon = ({ color = '#555' }) => (
   <Svg width="20" height="20" viewBox="0 0 24 24" fill="none">
     <Path
@@ -455,6 +468,320 @@ const SettingsPage = ({ onBack }) => (
   </View>
 );
 
+const DiscreetModeSettingsPage = ({ onBack }) => {
+  const [discreetModeEnabled, setDiscreetModeEnabled] = React.useState(false);
+  const [sudokuScreenEnabled, setSudokuScreenEnabled] = React.useState(false);
+  const [twoFingerTriggerEnabled, setTwoFingerTriggerEnabled] = React.useState(false);
+  const [bypassCode, setBypassCode] = React.useState('');
+  const [isSettingBypassCode, setIsSettingBypassCode] = React.useState(false);
+  const [newBypassCode, setNewBypassCode] = React.useState('');
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  const DISCREET_MODE_KEY = '@discreet_mode_enabled';
+  const SUDOKU_SCREEN_KEY = '@sudoku_screen_enabled';
+  const BYPASS_CODE_KEY = '@bypass_code';
+  const TWO_FINGER_TRIGGER_KEY = '@two_finger_trigger_enabled';
+
+  React.useEffect(() => {
+    loadSettings();
+  }, []);
+
+  const loadSettings = async () => {
+    try {
+      const [discreet, sudoku, code, twoFinger] = await Promise.all([
+        AsyncStorage.getItem(DISCREET_MODE_KEY),
+        AsyncStorage.getItem(SUDOKU_SCREEN_KEY),
+        AsyncStorage.getItem(BYPASS_CODE_KEY),
+        AsyncStorage.getItem(TWO_FINGER_TRIGGER_KEY),
+      ]);
+      setDiscreetModeEnabled(discreet === 'true');
+      setSudokuScreenEnabled(sudoku === 'true');
+      setBypassCode(code || '');
+      setTwoFingerTriggerEnabled(twoFinger === 'true');
+    } catch (error) {
+      console.error('Error loading discreet mode settings:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const toggleDiscreetMode = async (value) => {
+    try {
+      await AsyncStorage.setItem(DISCREET_MODE_KEY, value.toString());
+      setDiscreetModeEnabled(value);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update discreet mode setting.');
+    }
+  };
+
+  const toggleSudokuScreen = async (value) => {
+    if (value && !bypassCode) {
+      Alert.alert('Bypass Code Required', 'Please set a bypass code first before enabling the sudoku screen.');
+      return;
+    }
+    try {
+      await AsyncStorage.setItem(SUDOKU_SCREEN_KEY, value.toString());
+      setSudokuScreenEnabled(value);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update sudoku screen setting.');
+    }
+  };
+
+  const toggleTwoFingerTrigger = async (value) => {
+    if (value && !bypassCode) {
+      Alert.alert('Bypass Code Required', 'Please set a bypass code first before enabling the two-finger trigger.');
+      return;
+    }
+    try {
+      await AsyncStorage.setItem(TWO_FINGER_TRIGGER_KEY, value.toString());
+      setTwoFingerTriggerEnabled(value);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update two-finger trigger setting.');
+    }
+  };
+
+  const validateBypassCode = (code) => {
+    if (code.length < 4 || code.length > 9) {
+      return false;
+    }
+    return /^[1-9]+$/.test(code);
+  };
+
+  const handleSaveBypassCode = async () => {
+    if (!validateBypassCode(newBypassCode)) {
+      Alert.alert(
+        'Invalid Code',
+        'Bypass code must be 4-9 digits long and contain only numbers 1-9.'
+      );
+      return;
+    }
+    try {
+      const isFirstTime = !bypassCode;
+      await AsyncStorage.setItem(BYPASS_CODE_KEY, newBypassCode);
+      setBypassCode(newBypassCode);
+
+      // Auto-enable two-finger trigger when bypass code is set for the first time
+      if (isFirstTime) {
+        await AsyncStorage.setItem(TWO_FINGER_TRIGGER_KEY, 'true');
+        setTwoFingerTriggerEnabled(true);
+      }
+
+      setNewBypassCode('');
+      setIsSettingBypassCode(false);
+
+      if (isFirstTime) {
+        Alert.alert(
+          'Success',
+          'Bypass code has been set successfully.\n\nTwo-finger emergency trigger has been automatically enabled. You can disable it in settings if needed.'
+        );
+      } else {
+        Alert.alert('Success', 'Bypass code has been updated successfully.');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Failed to save bypass code.');
+    }
+  };
+
+  const handleBypassCodeChange = (text) => {
+    const filtered = text.replace(/[^1-9]/g, '');
+    if (filtered.length <= 9) {
+      setNewBypassCode(filtered);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <View style={styles.fullPage}>
+        <PageHeader title="Discreet Mode" onBack={onBack} />
+        <View style={styles.loadingContainer}>
+          <Text>Loading settings...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.fullPage}>
+      <PageHeader title="Discreet Mode" onBack={onBack} />
+      <ScrollView style={styles.settingsContainer}>
+        <View style={styles.settingsSection}>
+          <Text style={styles.sectionTitle}>General Settings</Text>
+
+          <View style={styles.settingItem}>
+            <View style={styles.settingInfo}>
+              <Text style={styles.settingLabel}>Enable Discreet Mode</Text>
+              <Text style={styles.settingDescription}>
+                Activate privacy features to disguise the app
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.toggle, discreetModeEnabled && styles.toggleActive]}
+              onPress={() => toggleDiscreetMode(!discreetModeEnabled)}
+            >
+              <View style={[styles.toggleCircle, discreetModeEnabled && styles.toggleCircleActive]} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.settingsSection}>
+          <Text style={styles.sectionTitle}>Bypass Code</Text>
+
+          {bypassCode ? (
+            <View style={styles.bypassCodeDisplay}>
+              <View style={styles.bypassCodeInfo}>
+                <Text style={styles.settingLabel}>Current Code</Text>
+                <Text style={styles.bypassCodeText}>{bypassCode}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.changeCodeButton}
+                onPress={() => setIsSettingBypassCode(true)}
+              >
+                <Text style={styles.changeCodeButtonText}>Change Code</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.noBypassCodeContainer}>
+              <Text style={styles.noBypassCodeText}>
+                Set a bypass code to enable sudoku screen
+              </Text>
+              <TouchableOpacity
+                style={styles.setCodeButton}
+                onPress={() => setIsSettingBypassCode(true)}
+              >
+                <Text style={styles.setCodeButtonText}>Set Bypass Code</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.settingsSection}>
+          <Text style={styles.sectionTitle}>Sudoku Screen</Text>
+
+          <View style={styles.settingItem}>
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, !bypassCode && styles.disabledText]}>
+                Show Sudoku Screen on Open
+              </Text>
+              <Text style={[styles.settingDescription, !bypassCode && styles.disabledText]}>
+                Display a fake sudoku game when app opens
+              </Text>
+              {!bypassCode && (
+                <Text style={styles.warningText}>
+                  Set a bypass code to enable this feature
+                </Text>
+              )}
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.toggle,
+                sudokuScreenEnabled && styles.toggleActive,
+                !bypassCode && styles.toggleDisabled
+              ]}
+              onPress={() => toggleSudokuScreen(!sudokuScreenEnabled)}
+              disabled={!bypassCode}
+            >
+              <View style={[
+                styles.toggleCircle,
+                sudokuScreenEnabled && styles.toggleCircleActive
+              ]} />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.settingsSection}>
+          <Text style={styles.sectionTitle}>Emergency Trigger</Text>
+
+          <View style={styles.emergencyInfoBox}>
+            <Text style={styles.emergencyInfoIcon}>🚨</Text>
+            <Text style={styles.emergencyInfoTitle}>TWO-FINGER EMERGENCY TRIGGER</Text>
+            <Text style={styles.emergencyInfoText}>
+              When enabled, hold two fingers on the screen for 1 second from anywhere in the app to instantly show the sudoku screen.{'\n\n'}
+              The sudoku will appear partially filled to look like you were playing a game. You can disable this feature at any time using the toggle below.
+            </Text>
+          </View>
+
+          <View style={styles.settingItem}>
+            <View style={styles.settingInfo}>
+              <Text style={[styles.settingLabel, !bypassCode && styles.disabledText]}>
+                Enable Two-Finger Trigger
+              </Text>
+              <Text style={[styles.settingDescription, !bypassCode && styles.disabledText]}>
+                Hold two fingers for 1 second to trigger sudoku
+              </Text>
+              {!bypassCode && (
+                <Text style={styles.warningText}>
+                  Set a bypass code to enable this feature
+                </Text>
+              )}
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.toggle,
+                twoFingerTriggerEnabled && styles.toggleActive,
+                !bypassCode && styles.toggleDisabled
+              ]}
+              onPress={() => toggleTwoFingerTrigger(!twoFingerTriggerEnabled)}
+              disabled={!bypassCode}
+            >
+              <View style={[
+                styles.toggleCircle,
+                twoFingerTriggerEnabled && styles.toggleCircleActive
+              ]} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+
+      <Modal visible={isSettingBypassCode} animationType="slide" transparent={true}>
+        <View style={styles.modalContainer}>
+          <View style={styles.formModal}>
+            <Text style={styles.formTitle}>
+              {bypassCode ? 'Change Bypass Code' : 'Set Bypass Code'}
+            </Text>
+            <Text style={styles.bypassCodeInstructions}>
+              Enter a 4-9 digit code using numbers 1-9.{'\n'}
+              You'll enter this code in the first row of the sudoku to access the app.
+            </Text>
+            <TextInput
+              style={styles.bypassCodeInput}
+              placeholder="Enter code (e.g., 1234)"
+              value={newBypassCode}
+              onChangeText={handleBypassCodeChange}
+              keyboardType="number-pad"
+              maxLength={9}
+              autoFocus
+            />
+            <Text style={styles.bypassCodeLength}>
+              {newBypassCode.length} / 9 digits
+            </Text>
+            <View style={styles.formActions}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => {
+                  setIsSettingBypassCode(false);
+                  setNewBypassCode('');
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.saveButton,
+                  !validateBypassCode(newBypassCode) && styles.disabledButton
+                ]}
+                onPress={handleSaveBypassCode}
+                disabled={!validateBypassCode(newBypassCode)}
+              >
+                <Text style={styles.saveButtonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+};
+
 const ContactFormModal = ({ visible, contact, onClose, onSave }) => {
   const [name, setName] = React.useState(contact?.name || '');
   const [phone, setPhone] = React.useState(contact?.phone || '');
@@ -767,6 +1094,290 @@ const ContactsPage = ({ onBack }) => {
   );
 };
 
+// --- Sudoku Puzzles Data ---
+const SUDOKU_PUZZLES = [
+  // Puzzle 1 (0 = empty cell)
+  [
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [5, 3, 0, 0, 7, 0, 0, 0, 0],
+    [6, 0, 0, 1, 9, 5, 0, 0, 0],
+    [0, 9, 8, 0, 0, 0, 0, 6, 0],
+    [8, 0, 0, 0, 6, 0, 0, 0, 3],
+    [4, 0, 0, 8, 0, 3, 0, 0, 1],
+    [7, 0, 0, 0, 2, 0, 0, 0, 6],
+    [0, 6, 0, 0, 0, 0, 2, 8, 0],
+    [0, 0, 0, 4, 1, 9, 0, 0, 5],
+  ],
+  // Puzzle 2
+  [
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 6, 0, 0, 4, 0, 0],
+    [7, 0, 0, 0, 0, 3, 6, 0, 0],
+    [0, 0, 0, 0, 9, 1, 0, 8, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 5, 0, 1, 8, 0, 0, 0, 3],
+    [0, 0, 0, 3, 0, 6, 0, 4, 5],
+    [0, 4, 0, 2, 0, 0, 0, 0, 0],
+    [9, 0, 0, 0, 0, 0, 7, 0, 0],
+  ],
+  // Puzzle 3
+  [
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 3, 0, 8, 5],
+    [0, 0, 1, 0, 2, 0, 0, 0, 0],
+    [0, 0, 0, 5, 0, 7, 0, 0, 0],
+    [0, 0, 4, 0, 0, 0, 1, 0, 0],
+    [0, 9, 0, 0, 0, 0, 0, 0, 0],
+    [5, 0, 0, 0, 0, 0, 0, 7, 3],
+    [0, 0, 2, 0, 1, 0, 0, 0, 0],
+    [0, 0, 0, 0, 4, 0, 0, 0, 9],
+  ],
+  // Puzzle 4
+  [
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 9, 2, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 3, 0],
+    [5, 0, 7, 0, 0, 0, 0, 6, 0],
+    [0, 4, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 8, 0, 0, 0, 0],
+    [0, 0, 0, 0, 1, 0, 0, 0, 0],
+    [0, 0, 0, 2, 0, 0, 5, 0, 0],
+  ],
+  // Puzzle 5
+  [
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 1, 2, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 5, 0, 4, 0, 7],
+    [0, 0, 0, 3, 0, 0, 2, 8, 0],
+    [0, 6, 0, 5, 0, 0, 0, 0, 8],
+    [0, 0, 0, 0, 1, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+  ],
+];
+
+// --- YourSudoku Logo ---
+const YourSudokuLogo = () => (
+  <View style={styles.logoContainer}>
+    <Text style={styles.logoText}>YOURSUDOKU</Text>
+  </View>
+);
+
+// --- Sudoku Screen Component ---
+const SudokuScreen = ({ onBypassSuccess, isEmergencyMode = false }) => {
+  const [selectedPuzzle] = React.useState(() => {
+    return SUDOKU_PUZZLES[Math.floor(Math.random() * SUDOKU_PUZZLES.length)];
+  });
+  const [grid, setGrid] = React.useState([]);
+  const [originalGrid, setOriginalGrid] = React.useState([]);
+  const [selectedCell, setSelectedCell] = React.useState(null);
+  const [bypassCode, setBypassCode] = React.useState('');
+
+  React.useEffect(() => {
+    loadBypassCode();
+    initializeGrid();
+  }, []);
+
+  const loadBypassCode = async () => {
+    try {
+      const code = await AsyncStorage.getItem('@bypass_code');
+      setBypassCode(code || '');
+    } catch (error) {
+      console.error('Error loading bypass code:', error);
+    }
+  };
+
+  const isValidPlacement = (grid, row, col, num) => {
+    // Check row
+    for (let x = 0; x < 9; x++) {
+      if (grid[row][x] === num) return false;
+    }
+
+    // Check column
+    for (let x = 0; x < 9; x++) {
+      if (grid[x][col] === num) return false;
+    }
+
+    // Check 3x3 box
+    const boxRow = Math.floor(row / 3) * 3;
+    const boxCol = Math.floor(col / 3) * 3;
+    for (let i = 0; i < 3; i++) {
+      for (let j = 0; j < 3; j++) {
+        if (grid[boxRow + i][boxCol + j] === num) return false;
+      }
+    }
+
+    return true;
+  };
+
+  const addRandomFilledCells = (baseGrid) => {
+    const newGrid = baseGrid.map(row => [...row]);
+    const emptyCells = [];
+
+    // Find all empty cells (excluding first row for bypass code)
+    for (let row = 1; row < 9; row++) {
+      for (let col = 0; col < 9; col++) {
+        if (newGrid[row][col] === 0) {
+          emptyCells.push({ row, col });
+        }
+      }
+    }
+
+    // Shuffle empty cells
+    for (let i = emptyCells.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [emptyCells[i], emptyCells[j]] = [emptyCells[j], emptyCells[i]];
+    }
+
+    // Add 10-15 random valid numbers
+    const targetCount = 10 + Math.floor(Math.random() * 6); // 10-15
+    let addedCount = 0;
+
+    for (const cell of emptyCells) {
+      if (addedCount >= targetCount) break;
+
+      // Try random numbers 1-9
+      const numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+      for (let i = numbers.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [numbers[i], numbers[j]] = [numbers[j], numbers[i]];
+      }
+
+      for (const num of numbers) {
+        if (isValidPlacement(newGrid, cell.row, cell.col, num)) {
+          newGrid[cell.row][cell.col] = num;
+          addedCount++;
+          break;
+        }
+      }
+    }
+
+    return newGrid;
+  };
+
+  const initializeGrid = () => {
+    let newGrid = selectedPuzzle.map(row => [...row]);
+
+    // If emergency mode, add random filled cells
+    if (isEmergencyMode) {
+      newGrid = addRandomFilledCells(newGrid);
+    }
+
+    setGrid(newGrid);
+    setOriginalGrid(newGrid.map(row => [...row]));
+  };
+
+  const handleCellPress = (row, col) => {
+    if (originalGrid[row][col] === 0) {
+      setSelectedCell({ row, col });
+    }
+  };
+
+  const handleNumberInput = (number) => {
+    if (selectedCell) {
+      const { row, col } = selectedCell;
+      const newGrid = grid.map((r, i) =>
+        i === row ? r.map((c, j) => (j === col ? number : c)) : [...r]
+      );
+      setGrid(newGrid);
+      setSelectedCell(null);
+
+      // Check bypass code if we're in the first row
+      if (row === 0) {
+        setTimeout(() => checkBypassCode(newGrid), 150);
+      }
+    }
+  };
+
+  const checkBypassCode = (currentGrid) => {
+    if (!bypassCode) return;
+
+    const firstRow = currentGrid[0];
+    const codeLength = bypassCode.length;
+
+    // Check only the first N cells where N = bypass code length
+    const relevantCells = firstRow.slice(0, codeLength);
+    const areRelevantCellsFilled = relevantCells.every(cell => cell !== 0);
+
+    if (areRelevantCellsFilled) {
+      const enteredCode = relevantCells.join('');
+      if (enteredCode === bypassCode) {
+        onBypassSuccess();
+      }
+    }
+  };
+
+  return (
+    <View style={styles.sudokuContainer}>
+      <View style={styles.sudokuContent}>
+        <View style={styles.sudokuGrid}>
+          {grid.map((row, rowIndex) => (
+            <View key={rowIndex} style={styles.sudokuRow}>
+              {row.map((cell, colIndex) => {
+                const isSelected =
+                  selectedCell?.row === rowIndex && selectedCell?.col === colIndex;
+                const isOriginal = originalGrid[rowIndex][colIndex] !== 0;
+                const isFirstRow = rowIndex === 0;
+                const isThickRightBorder = (colIndex + 1) % 3 === 0 && colIndex < 8;
+                const isThickBottomBorder = (rowIndex + 1) % 3 === 0 && rowIndex < 8;
+
+                return (
+                  <TouchableOpacity
+                    key={colIndex}
+                    style={[
+                      styles.sudokuCell,
+                      isFirstRow && styles.sudokuFirstRowCell,
+                      isThickRightBorder && styles.sudokuCellThickRight,
+                      isThickBottomBorder && styles.sudokuCellThickBottom,
+                      isSelected && styles.sudokuCellSelected,
+                    ]}
+                    onPress={() => handleCellPress(rowIndex, colIndex)}
+                    disabled={isOriginal}
+                  >
+                    <Text
+                      style={[
+                        styles.sudokuCellText,
+                        isOriginal && styles.sudokuCellTextOriginal,
+                        isFirstRow && styles.sudokuFirstRowText,
+                      ]}
+                    >
+                      {cell !== 0 ? cell : ''}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ))}
+        </View>
+
+        <YourSudokuLogo />
+
+        {selectedCell && (
+          <View style={styles.numberPad}>
+            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((number) => (
+              <TouchableOpacity
+                key={number}
+                style={styles.numberButton}
+                onPress={() => handleNumberInput(number)}
+              >
+                <Text style={styles.numberButtonText}>{number}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              style={styles.numberButtonClear}
+              onPress={() => handleNumberInput(0)}
+            >
+              <Text style={styles.numberButtonText}>Clear</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+};
+
 const SideMenu = ({ isOpen, onClose, onNavigate }) => (
   <Modal
     animationType="fade"
@@ -791,6 +1402,10 @@ const SideMenu = ({ isOpen, onClose, onNavigate }) => (
                     <ContactIcon color="#374151" />
                     <Text style={styles.sideMenuLinkText}>Emergency Contacts</Text>
                 </TouchableOpacity>
+                <TouchableOpacity style={styles.sideMenuLink} onPress={() => onNavigate('DiscreetMode')}>
+                    <EyeOffIcon color="#374151" />
+                    <Text style={styles.sideMenuLinkText}>Discreet Mode</Text>
+                </TouchableOpacity>
             </View>
         </View>
     </Pressable>
@@ -801,6 +1416,110 @@ const SideMenu = ({ isOpen, onClose, onNavigate }) => (
 export default function App() {
   const [currentPage, setCurrentPage] = React.useState('Home');
   const [isMenuOpen, setMenuOpen] = React.useState(false);
+  const [showSudoku, setShowSudoku] = React.useState(false);
+  const [isCheckingSettings, setIsCheckingSettings] = React.useState(true);
+  const [twoFingerTriggerEnabled, setTwoFingerTriggerEnabled] = React.useState(false);
+  const [isEmergencyMode, setIsEmergencyMode] = React.useState(false);
+  const twoFingerTimer = useRef(null);
+  const touchCount = useRef(0);
+  const initialTouchPositions = useRef([]);
+
+  React.useEffect(() => {
+    checkDiscreetModeSettings();
+  }, []);
+
+  const checkDiscreetModeSettings = async () => {
+    try {
+      const [discreetMode, sudokuScreen, twoFinger] = await Promise.all([
+        AsyncStorage.getItem('@discreet_mode_enabled'),
+        AsyncStorage.getItem('@sudoku_screen_enabled'),
+        AsyncStorage.getItem('@two_finger_trigger_enabled'),
+      ]);
+
+      if (discreetMode === 'true' && sudokuScreen === 'true') {
+        setShowSudoku(true);
+      }
+
+      setTwoFingerTriggerEnabled(twoFinger === 'true');
+    } catch (error) {
+      console.error('Error checking discreet mode settings:', error);
+    } finally {
+      setIsCheckingSettings(false);
+    }
+  };
+
+  const handleBypassSuccess = () => {
+    setShowSudoku(false);
+    setIsEmergencyMode(false);
+  };
+
+  const onTouchStart = (e) => {
+    if (!twoFingerTriggerEnabled || showSudoku) return;
+
+    touchCount.current = e.nativeEvent.touches.length;
+
+    if (touchCount.current === 2) {
+      // Store initial positions
+      initialTouchPositions.current = e.nativeEvent.touches.map(touch => ({
+        x: touch.pageX,
+        y: touch.pageY,
+      }));
+
+      // Start timer for 1 second hold
+      twoFingerTimer.current = setTimeout(() => {
+        triggerEmergencySudoku();
+      }, 1000);
+    } else {
+      // Cancel if not exactly 2 fingers
+      if (twoFingerTimer.current) {
+        clearTimeout(twoFingerTimer.current);
+        twoFingerTimer.current = null;
+      }
+    }
+  };
+
+  const onTouchMove = (e) => {
+    if (!twoFingerTriggerEnabled || !twoFingerTimer.current) return;
+
+    // Check if fingers moved too much (more than 30px)
+    const currentTouches = e.nativeEvent.touches;
+    if (currentTouches.length !== 2) {
+      clearTimeout(twoFingerTimer.current);
+      twoFingerTimer.current = null;
+      return;
+    }
+
+    let maxMovement = 0;
+    for (let i = 0; i < 2; i++) {
+      if (initialTouchPositions.current[i]) {
+        const dx = currentTouches[i].pageX - initialTouchPositions.current[i].x;
+        const dy = currentTouches[i].pageY - initialTouchPositions.current[i].y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        maxMovement = Math.max(maxMovement, distance);
+      }
+    }
+
+    // Cancel if moved more than 30px
+    if (maxMovement > 30) {
+      clearTimeout(twoFingerTimer.current);
+      twoFingerTimer.current = null;
+    }
+  };
+
+  const onTouchEnd = (e) => {
+    if (!twoFingerTriggerEnabled) return;
+
+    // Cancel timer if fingers lifted too early
+    if (twoFingerTimer.current) {
+      clearTimeout(twoFingerTimer.current);
+      twoFingerTimer.current = null;
+    }
+  };
+
+  const triggerEmergencySudoku = () => {
+    setIsEmergencyMode(true);
+    setShowSudoku(true);
+  };
 
   const renderPage = () => {
     const goHome = () => setCurrentPage('Home');
@@ -811,6 +1530,7 @@ export default function App() {
       case 'Timer': return <TimerPage onBack={goHome} />;
       case 'Settings': return <SettingsPage onBack={goHome} />;
       case 'Contacts': return <ContactsPage onBack={goHome} />;
+      case 'DiscreetMode': return <DiscreetModeSettingsPage onBack={goHome} />;
       default: return <HomePage />;
     }
   };
@@ -821,39 +1541,60 @@ export default function App() {
     setCurrentPage(page);
   };
 
+  if (isCheckingSettings) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text>Loading...</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (showSudoku) {
+    return <SudokuScreen onBypassSuccess={handleBypassSuccess} isEmergencyMode={isEmergencyMode} />;
+  }
+
   return (
     <EmergencyContactsProvider>
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle="dark-content" backgroundColor="#FEF2F2" />
-        {currentPage === 'Home' && <AppHeader onMenuPress={() => setMenuOpen(true)} title="Yours" />}
+      <View
+        style={styles.container}
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+        <SafeAreaView style={styles.container}>
+          <StatusBar barStyle="dark-content" backgroundColor="#FEF2F2" />
+          {currentPage === 'Home' && <AppHeader onMenuPress={() => setMenuOpen(true)} title="Yours" />}
 
-        <View style={styles.contentArea}>
-          {renderPage()}
-        </View>
-
-        {currentPage === 'Home' && (
-          <View style={styles.bottomNav}>
-            <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Journal')}>
-              <JournalIcon />
-              <Text style={styles.navButtonText}>Journal</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Panic')}>
-              <AlertIcon />
-              <Text style={styles.navButtonText}>Panic</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Timer')}>
-              <TimerIcon />
-              <Text style={styles.navButtonText}>Timer</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Settings')}>
-              <SettingsIcon />
-              <Text style={styles.navButtonText}>Settings</Text>
-            </TouchableOpacity>
+          <View style={styles.contentArea}>
+            {renderPage()}
           </View>
-        )}
 
-        <SideMenu isOpen={isMenuOpen} onClose={() => setMenuOpen(false)} onNavigate={handleMenuNavigation}/>
-      </SafeAreaView>
+          {currentPage === 'Home' && (
+            <View style={styles.bottomNav}>
+              <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Journal')}>
+                <JournalIcon />
+                <Text style={styles.navButtonText}>Journal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Panic')}>
+                <AlertIcon />
+                <Text style={styles.navButtonText}>Panic</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Timer')}>
+                <TimerIcon />
+                <Text style={styles.navButtonText}>Timer</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Settings')}>
+                <SettingsIcon />
+                <Text style={styles.navButtonText}>Settings</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <SideMenu isOpen={isMenuOpen} onClose={() => setMenuOpen(false)} onNavigate={handleMenuNavigation}/>
+        </SafeAreaView>
+      </View>
     </EmergencyContactsProvider>
   );
 }
@@ -1252,5 +1993,279 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center'
-  }
+  },
+  // Discreet Mode Settings
+  settingsContainer: {
+    flex: 1,
+    padding: 20,
+  },
+  settingsSection: {
+    marginBottom: 24,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 16,
+  },
+  settingItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  settingInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  settingLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  settingDescription: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  toggle: {
+    width: 50,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#D1D5DB',
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleActive: {
+    backgroundColor: '#F472B6',
+  },
+  toggleDisabled: {
+    backgroundColor: '#E5E7EB',
+  },
+  toggleCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'white',
+    elevation: 2,
+  },
+  toggleCircleActive: {
+    transform: [{ translateX: 22 }],
+  },
+  bypassCodeDisplay: {
+    backgroundColor: '#FEF2F2',
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FBCFE8',
+  },
+  bypassCodeInfo: {
+    marginBottom: 12,
+  },
+  bypassCodeText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    letterSpacing: 4,
+    marginTop: 8,
+  },
+  changeCodeButton: {
+    backgroundColor: '#F472B6',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+  },
+  changeCodeButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  noBypassCodeContainer: {
+    padding: 16,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  noBypassCodeText: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  setCodeButton: {
+    backgroundColor: '#F472B6',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+  },
+  setCodeButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  disabledText: {
+    color: '#9CA3AF',
+  },
+  warningText: {
+    fontSize: 12,
+    color: '#F59E0B',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  bypassCodeInstructions: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginBottom: 16,
+    textAlign: 'center',
+    lineHeight: 18,
+    paddingHorizontal: 8,
+  },
+  bypassCodeInput: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    padding: 16,
+    borderRadius: 8,
+    fontSize: 24,
+    letterSpacing: 4,
+    textAlign: 'center',
+    fontWeight: 'bold',
+  },
+  bypassCodeLength: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'right',
+    marginTop: 8,
+  },
+  emergencyInfoBox: {
+    backgroundColor: '#FEF2F2',
+    borderLeftWidth: 4,
+    borderLeftColor: '#EF4444',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  emergencyInfoIcon: {
+    fontSize: 24,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emergencyInfoTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#991B1B',
+    textAlign: 'center',
+    marginBottom: 8,
+    letterSpacing: 0.5,
+  },
+  emergencyInfoText: {
+    fontSize: 13,
+    color: '#6B7280',
+    lineHeight: 18,
+    textAlign: 'left',
+  },
+  // Sudoku Screen
+  sudokuContainer: {
+    flex: 1,
+    backgroundColor: 'white',
+  },
+  sudokuContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  sudokuGrid: {
+    borderWidth: 2,
+    borderColor: '#000',
+    backgroundColor: 'white',
+  },
+  sudokuRow: {
+    flexDirection: 'row',
+  },
+  sudokuCell: {
+    width: 38,
+    height: 38,
+    borderWidth: 0.5,
+    borderColor: '#D1D5DB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'white',
+  },
+  sudokuFirstRowCell: {
+    backgroundColor: '#FEF2F2',
+  },
+  sudokuCellThickRight: {
+    borderRightWidth: 2,
+    borderRightColor: '#000',
+  },
+  sudokuCellThickBottom: {
+    borderBottomWidth: 2,
+    borderBottomColor: '#000',
+  },
+  sudokuCellSelected: {
+    backgroundColor: '#FBCFE8',
+  },
+  sudokuCellText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#F472B6',
+  },
+  sudokuCellTextOriginal: {
+    color: '#000',
+    fontWeight: 'bold',
+  },
+  sudokuFirstRowText: {
+    fontWeight: 'bold',
+  },
+  logoContainer: {
+    marginTop: 24,
+    marginBottom: 16,
+  },
+  logoText: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#F472B6',
+    letterSpacing: 2,
+  },
+  numberPad: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginTop: 24,
+    width: '100%',
+    maxWidth: 300,
+  },
+  numberButton: {
+    width: 60,
+    height: 60,
+    backgroundColor: '#F472B6',
+    margin: 4,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+  },
+  numberButtonClear: {
+    width: 128,
+    height: 60,
+    backgroundColor: '#EF4444',
+    margin: 4,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 2,
+  },
+  numberButtonText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+  },
 });
