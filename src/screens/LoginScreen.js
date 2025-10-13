@@ -1,6 +1,6 @@
 import React from "react";
 import {View, Text, Button, StyleSheet} from 'react-native';
-import { loginUser } from utils/Storage.js;
+import { loginUser } from '../utils/Storage.js';
 
 export const LoginPage = ({ navigation }) => {
     const [email, setEmail] = useState('');

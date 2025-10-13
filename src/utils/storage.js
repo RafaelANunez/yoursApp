@@ -5,7 +5,7 @@ export const logoutUser = async () => {
   await AsyncStorage.multiRemove(['userEmail', 'userPassword', 'isLoggedIn']);
 };
 
-const loginUser = async () => {
+export const loginUser = async () => {
     if (email === 'test@example.com' && password === 'password') {
       try {
         await AsyncStorage.setItem('userEmail', email);
@@ -19,7 +19,7 @@ const loginUser = async () => {
     }
 };
 
-const signupUser = async () => {
+export const signupUser = async () => {
     if (!email || !password) {
       Alert.alert('Error', 'Please enter email and password');
       return;

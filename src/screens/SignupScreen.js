@@ -1,11 +1,13 @@
 import React from "react";
 import {View, Text, Button, StyleSheet} from 'react-native';
+import { signupUser } from "../utils/Storage";
 
 
 const handleSignup = ({ navigation }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-  
+    await signupUser();
+};
     return (
       <View style={styles.container}>
         <Text style={styles.title}>Sign Up</Text>
@@ -28,4 +30,3 @@ const handleSignup = ({ navigation }) => {
         <Button title="Back to Login" onPress={navigation.replace('Login')} />
       </View>
     );
-  };

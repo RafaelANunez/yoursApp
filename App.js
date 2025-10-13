@@ -323,40 +323,16 @@ const EmergencyContactsProvider = ({ children }) => {
 };
 
 // --- Reusable Components ---
-const AppHeader = ({ onMenuPress, title }) => (
-  <View style={styles.appHeader}>
-    <TouchableOpacity onPress={onMenuPress} style={styles.headerButton}>
-      <MenuIcon />
-    </TouchableOpacity>
-    <Text style={styles.headerTitle}>{title}</Text>
-    <View style={styles.headerSpacer} />
-  </View>
-);
 
-const PageHeader = ({ title, onBack }) => (
-  <View style={styles.appHeader}>
-    <TouchableOpacity onPress={onBack} style={styles.headerButton}>
-      <Text style={styles.backButtonText}>‹</Text>
-    </TouchableOpacity>
-    <Text style={styles.headerTitle}>{title}</Text>
-    <View style={styles.headerSpacer} />
-  </View>
-);
+
+
 
 // --- Page Components ---
-const PageContainer = ({ children }) => (
-  <View style={styles.pageContainer}>{children}</View>
-);
 
-const HomePage = ({ onLogout }) => (
-  <PageContainer>
-    <Text style={styles.homeTitle}>Welcome to Yours</Text>
-    <Text style={styles.homeSubtitle}>You are in a safe space.</Text>
-    <Button title="Log Out" onPress={handleLogout} />
-  </PageContainer>
-);
 
-const JournalPage = ({ onBack }) => (
+
+
+/*const JournalPage = ({ onBack }) => (
   <View style={styles.fullPage}>
     <PageHeader title="My Journal" onBack={onBack} />
     <PageContainer>
@@ -366,8 +342,8 @@ const JournalPage = ({ onBack }) => (
       </TouchableOpacity>
     </PageContainer>
   </View>
-);
-
+);*/
+/*
 const PanicPage = ({ onBack }) => {
   const { contacts } = useEmergencyContacts();
   const pressTimeout = React.useRef(null);
@@ -458,7 +434,7 @@ const PanicPage = ({ onBack }) => {
       </PageContainer>
     </View>
   );
-};
+};*/
 
 const TimerPage = ({ onBack }) => (
   <View style={styles.fullPage}>

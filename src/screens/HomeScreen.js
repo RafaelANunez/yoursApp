@@ -1,6 +1,6 @@
 import React from "react";
 import {View, Text, Button, StyleSheet} from 'react-native';
-import { logoutUser } from utils/Storage.js;
+import { logoutUser } from '../utils/Storage.js';
 
 export default function HomeScreen({ navigation })
 {
@@ -17,6 +17,16 @@ export default function HomeScreen({ navigation })
         </View>
       );
 }
+
+/*
+const HomePage = ({ onLogout }) => (
+  <PageContainer>
+    <Text style={styles.homeTitle}>Welcome to Yours</Text>
+    <Text style={styles.homeSubtitle}>You are in a safe space.</Text>
+    <Button title="Log Out" onPress={handleLogout} />
+  </PageContainer>
+);
+*/
 
 
   
