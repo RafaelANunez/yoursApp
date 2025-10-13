@@ -16,6 +16,10 @@ import { JournalIcon, AlertIcon, TimerIcon, SettingsIcon } from './components/ic
 export default function App() {
   const [currentPage, setCurrentPage] = useState('Home');
   const [isMenuOpen, setMenuOpen] = useState(false);
+<<<<<<< Updated upstream
+=======
+  const [isFakeCallActive, setFakeCallActive] = useState(false);
+>>>>>>> Stashed changes
 
   const renderPage = () => {
     const goHome = () => setCurrentPage('Home');
