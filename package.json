@@ -11,13 +11,16 @@
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",
     "expo": "~54.0.2",
-    "expo-contacts": "^15.0.8",
+    "expo-av": "~16.0.7",
+    "expo-contacts": "^15.0.9",
+    "expo-location": "~19.0.7",
+    "expo-sms": "~14.0.7",
     "expo-status-bar": "~3.0.8",
     "react": "19.1.0",
     "react-native": "0.81.4",
     "react-native-svg": "^15.12.1",
-    "expo-location": "~19.0.7",
-    "expo-sms": "~14.0.7"
+    "react-native-volume-manager": "^2.0.8",
+    "expo-dev-client": "~6.0.15"
   },
   "private": true
 }

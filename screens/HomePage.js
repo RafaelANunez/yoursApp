@@ -1,16 +1,39 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
 const PageContainer = ({ children }) => (
     <View style={styles.pageContainer}>{children}</View>
 );
 
-export const HomePage = () => (
-  <PageContainer>
-    <Text style={styles.homeTitle}>Welcome to Yours</Text>
-    <Text style={styles.homeSubtitle}>You are in a safe space.</Text>
-  </PageContainer>
-);
+export const HomePage = ({ onFakeCall }) => {
+  const pressTimeout = useRef(null);
+
+  const handlePressIn = () => {
+    pressTimeout.current = setTimeout(() => {
+      onFakeCall();
+    }, 10000); // 10 seconds
+  };
+
+  const handlePressOut = () => {
+    if (pressTimeout.current) {
+      clearTimeout(pressTimeout.current);
+    }
+  };
+
+  return (
+    <TouchableOpacity
+      style={{ flex: 1 }}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      activeOpacity={1}
+    >
+      <PageContainer>
+        <Text style={styles.homeTitle}>Welcome to Yours</Text>
+        <Text style={styles.homeSubtitle}>You are in a safe space.</Text>
+      </PageContainer>
+    </TouchableOpacity>
+  );
+};
 
 const styles = StyleSheet.create({
     pageContainer: {

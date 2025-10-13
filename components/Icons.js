@@ -1,6 +1,6 @@
 import React from 'react';
 import { View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Circle, Rect } from 'react-native-svg';
 
 export const MenuIcon = ({ color = '#555' }) => (
   <View style={{ width: 24, height: 24, justifyContent: 'space-around' }}>
@@ -95,15 +95,9 @@ export const AlertIcon = ({ color = '#555' }) => (
     </Svg>
   );
   
-  export const PhoneIcon = ({ color = '#555' }) => (
-    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M22 16.92V19.92C22.0011 20.1985 21.9441 20.4742 21.8325 20.7293C21.7209 20.9845 21.5573 21.2136 21.3521 21.4019C21.1468 21.5901 20.9046 21.7335 20.6407 21.8227C20.3769 21.9119 20.0974 21.9451 19.82 21.92C16.7428 21.5856 13.787 20.5341 11.19 18.85C8.77382 17.3147 6.72533 15.2662 5.18999 12.85C3.49997 10.2412 2.44824 7.27099 2.11999 4.18C2.095 3.90347 2.12787 3.62476 2.21649 3.36162C2.30512 3.09849 2.44756 2.85669 2.63476 2.65162C2.82196 2.44655 3.04981 2.28271 3.30379 2.17052C3.55777 2.05833 3.83233 2.00026 4.10999 2H7.10999C7.59544 1.99532 8.06428 2.16718 8.43018 2.48363C8.79608 2.80008 9.03318 3.23954 9.10999 3.72C9.25523 4.68007 9.52015 5.62273 9.89999 6.53C10.0177 6.88792 10.0385 7.27691 9.96073 7.65088C9.88297 8.02485 9.70517 8.36811 9.44999 8.64L8.08999 10C9.513 12.4135 11.5865 14.4870 14 15.91L15.36 14.55C15.6319 14.2948 15.9751 14.117 16.3491 14.0393C16.7231 13.9615 17.1121 13.9823 17.47 14.1C18.3773 14.4798 19.3199 14.7448 20.28 14.89C20.7658 14.9687 21.2094 15.2093 21.5265 15.5789C21.8437 15.9484 22.0122 16.4221 21.01 16.92H22Z"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+  export const PhoneIcon = ({ color = '#fff', ...props }) => (
+    <Svg width="32" height="32" viewBox="0 0 24 24" fill="none" {...props}>
+        <Path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
   
@@ -164,3 +158,43 @@ export const AlertIcon = ({ color = '#555' }) => (
       <Path d="M12 15V3" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
+
+export const RecordIcon = ({ color = '#000' }) => (
+    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <Circle cx="12" cy="12" r="10" stroke={color} strokeWidth="2"/>
+        <Circle cx="12" cy="12" r="4" fill={color}/>
+    </Svg>
+);
+export const HoldIcon = ({ color = '#000' }) => (
+    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <Path d="M10 9v6M14 9v6" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+);
+export const BluetoothIcon = ({ color = '#000' }) => (
+    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <Path d="M6.5 6.5l11 11L12 23V1l5.5 5.5-11 11" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+);
+export const SpeakerIcon = ({ color = '#000' }) => (
+    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <Path d="M11 5L6 9H2v6h4l5 4V5zM15.54 8.46a5 5 0 010 7.07" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+);
+export const MuteIcon = ({ color = '#000' }) => (
+    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <Path d="M11 5L6 9H2v6h4l5 4V5zM23 9l-6 6M17 9l6 6" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+);
+export const KeypadIcon = ({ color = '#000' }) => (
+    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <Circle cx="5" cy="5" r="1" fill={color}/>
+        <Circle cx="12" cy="5" r="1" fill={color}/>
+        <Circle cx="19" cy="5" r="1" fill={color}/>
+        <Circle cx="5" cy="12" r="1" fill={color}/>
+        <Circle cx="12" cy="12" r="1" fill={color}/>
+        <Circle cx="19" cy="12" r="1" fill={color}/>
+        <Circle cx="5" cy="19" r="1" fill={color}/>
+        <Circle cx="12" cy="19" r="1" fill={color}/>
+        <Circle cx="19" cy="19" r="1" fill={color}/>
+    </Svg>
+);
