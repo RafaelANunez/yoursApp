@@ -38,6 +38,7 @@ export const ContactFormModal = ({ visible, contact, onClose, onSave }) => {
           <TextInput
             style={styles.input}
             placeholder="Name"
+            placeholderTextColor="#9CA3AF"
             value={name}
             onChangeText={setName}
             maxLength={50}
@@ -46,6 +47,7 @@ export const ContactFormModal = ({ visible, contact, onClose, onSave }) => {
           <TextInput
             style={styles.input}
             placeholder="Phone Number"
+            placeholderTextColor="#9CA3AF"
             value={phone}
             onChangeText={setPhone}
             keyboardType="phone-pad"
@@ -55,6 +57,7 @@ export const ContactFormModal = ({ visible, contact, onClose, onSave }) => {
           <TextInput
             style={styles.input}
             placeholder="Relationship (optional)"
+            placeholderTextColor="#9CA3AF"
             value={relationship}
             onChangeText={setRelationship}
             maxLength={30}
@@ -101,6 +104,7 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         marginBottom: 16,
         fontSize: 16,
+        color: '#1F2937',
       },
       formActions: {
         flexDirection: 'row',

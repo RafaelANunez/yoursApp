@@ -38,6 +38,7 @@ export const JournalEntryForm = ({ visible, entry, onClose, onSave, templateData
           <TextInput
             style={styles.input}
             placeholder="Title"
+            placeholderTextColor="#9CA3AF"
             value={title}
             onChangeText={setTitle}
             maxLength={100}
@@ -46,6 +47,7 @@ export const JournalEntryForm = ({ visible, entry, onClose, onSave, templateData
           <TextInput
             style={[styles.input, { height: 200, textAlignVertical: 'top' }]}
             placeholder="Add notes..."
+            placeholderTextColor="#9CA3AF"
             value={notes}
             onChangeText={setNotes}
             multiline={true}
@@ -92,6 +94,7 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         marginBottom: 16,
         fontSize: 16,
+        color: '#1F2937',
       },
       formActions: {
         flexDirection: 'row',
