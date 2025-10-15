@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Platform } from 'react-native';
 
 const PageContainer = ({ children }) => (
     <View style={styles.pageContainer}>{children}</View>
@@ -53,14 +53,15 @@ const styles = StyleSheet.create({
         backgroundColor: 'transparent',
       },
       homeTitle: {
-        fontSize: 30,
-        fontWeight: 'bold',
-        color: '#1F2937',
-        marginBottom: 8,
+        fontSize: 47,
+        fontWeight: 'normal',
+        color: '#CD5F66',
+        marginBottom: 5,
+        fontFamily: Platform.OS === 'ios' ? 'SnellRoundhand' : 'cursive',
       },
       homeSubtitle: {
         fontSize: 18,
-        color: '#4B5563',
+        color: '#291314',
       },
       backgroundImage: {
         flex: 1,
