@@ -259,6 +259,7 @@ export default function App() {
             onFakeCall={() => setFakeCallActive(true)}
             screenHoldEnabled={screenHoldEnabled}
             screenHoldDuration={screenHoldDuration}
+            onNavigateToJournal={() => setCurrentPage('Journal')}
         />
       );
     }

@@ -1,11 +1,11 @@
 import React, { useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Platform, Pressable } from 'react-native';
 
 const PageContainer = ({ children }) => (
     <View style={styles.pageContainer}>{children}</View>
 );
 
-export const HomePage = ({ onFakeCall, screenHoldEnabled, screenHoldDuration }) => {
+export const HomePage = ({ onFakeCall, screenHoldEnabled, screenHoldDuration, onNavigateToJournal }) => {
   const pressTimeout = useRef(null);
 
   const handlePressIn = () => {
@@ -37,6 +37,19 @@ export const HomePage = ({ onFakeCall, screenHoldEnabled, screenHoldDuration }) 
         <PageContainer>
           <Text style={styles.homeTitle}>Welcome to Yours</Text>
           <Text style={styles.homeSubtitle}>You are in a safe space.</Text>
+          <Pressable
+            onPress={onNavigateToJournal}
+            style={({ pressed }) => [
+              styles.journalButton,
+              pressed && styles.journalButtonPressed
+            ]}
+          >
+            {({ pressed }) => (
+              <Text style={[styles.journalButtonText, pressed && styles.journalButtonTextPressed]}>
+                Go to Journal
+              </Text>
+            )}
+          </Pressable>
         </PageContainer>
       </TouchableOpacity>
     </ImageBackground>
@@ -73,5 +86,25 @@ const styles = StyleSheet.create({
       backgroundImageStyle: {
         resizeMode: 'contain',
         opacity: 0.3,
-      }
+      },
+      journalButton: {
+        marginTop: 20,
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderWidth: 2,
+        borderColor: '#CD5F66',
+        borderRadius: 20,
+        backgroundColor: 'transparent',
+      },
+      journalButtonPressed: {
+        backgroundColor: '#CD5F66',
+      },
+      journalButtonText: {
+        color: '#CD5F66',
+        fontSize: 16,
+        fontWeight: 'bold',
+      },
+      journalButtonTextPressed: {
+        color: 'white',
+      },
 });
