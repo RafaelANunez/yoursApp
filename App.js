@@ -92,7 +92,7 @@ export default function App() {
       // 2. Volume is already at max (1.0) and an event is still being fired
       //    (implying the user is still holding the up button).
       const isVolumeUpPress = (lastVolume.current !== null && currentVolume > lastVolume.current) ||
-                              (currentVolume === 1.5 && lastVolume.current === 1.5);
+                              (currentVolume === 1.0 && lastVolume.current === 1.0);
 
       if (isVolumeUpPress) {
         if (!volumeHoldTimeout.current) {
