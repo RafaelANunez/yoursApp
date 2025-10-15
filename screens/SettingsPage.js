@@ -9,6 +9,9 @@ export const SettingsPage = ({ onBack, setCurrentPage }) => (
       <TouchableOpacity onPress={() => setCurrentPage('FakeCallSettings')}>
         <Text style={styles.linkText}>Fake Call Settings</Text>
       </TouchableOpacity>
+      <TouchableOpacity style={{marginTop: 20}} onPress={() => setCurrentPage('BackupAndRestore')}>
+        <Text style={styles.linkText}>Backup & Restore</Text>
+      </TouchableOpacity>
     </View>
   </View>
 );
