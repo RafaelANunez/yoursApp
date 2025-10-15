@@ -18,6 +18,8 @@ import { JournalIcon, AlertIcon, TimerIcon, SettingsIcon } from './components/ic
 import { VolumeManager } from 'react-native-volume-manager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import FakeCallSettingsPage from './screens/FakeCallSettingsPage';
+import BackupAndRestorePage from './screens/BackupAndRestorePage';
+
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('Home');
@@ -232,6 +234,7 @@ export default function App() {
       case 'Settings': return <SettingsPage onBack={goHome} setCurrentPage={setCurrentPage} />;
       case 'Contacts': return <ContactsPage onBack={goHome} />;
       case 'DiscreetMode': return <DiscreetModeSettingsPage onBack={goHome} />;
+      case 'BackupAndRestore': return <BackupAndRestorePage onBack={() => setCurrentPage('Settings')} />;
       case 'FakeCallSettings':
           return (
             <FakeCallSettingsPage
