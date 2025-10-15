@@ -5,13 +5,15 @@ const PageContainer = ({ children }) => (
     <View style={styles.pageContainer}>{children}</View>
 );
 
-export const HomePage = ({ onFakeCall }) => {
+export const HomePage = ({ onFakeCall, screenHoldEnabled, screenHoldDuration }) => {
   const pressTimeout = useRef(null);
 
   const handlePressIn = () => {
-    pressTimeout.current = setTimeout(() => {
-      onFakeCall();
-    }, 10000); // 10 seconds
+    if (screenHoldEnabled) {
+      pressTimeout.current = setTimeout(() => {
+        onFakeCall();
+      }, screenHoldDuration * 1000); // Convert seconds to ms
+    }
   };
 
   const handlePressOut = () => {
