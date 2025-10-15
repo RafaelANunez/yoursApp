@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, Modal, TouchableOpacity, StyleSheet, Pressable, Image } from 'react-native';
-import { CloseIcon, ContactIcon } from './icons';
+import { CloseIcon, ContactIcon, EyeOffIcon } from './icons';
 
 export const SideMenu = ({ isOpen, onClose, onNavigate }) => (
   <Modal
@@ -25,6 +25,10 @@ export const SideMenu = ({ isOpen, onClose, onNavigate }) => (
                 <TouchableOpacity style={styles.sideMenuLink} onPress={() => onNavigate('Contacts')}>
                     <ContactIcon color="#374151" />
                     <Text style={styles.sideMenuLinkText}>Emergency Contacts</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.sideMenuLink} onPress={() => onNavigate('DiscreetMode')}>
+                    <EyeOffIcon color="#374151" />
+                    <Text style={styles.sideMenuLinkText}>Discreet Mode</Text>
                 </TouchableOpacity>
             </View>
         </View>

@@ -103,10 +103,11 @@ export const IncidentReportForm = ({ visible, entry, onClose, onSave }) => {
               value={incidentDate.toLocaleDateString()}
               onChangeText={(text) => setIncidentDate(new Date(text))}
               placeholder="MM/DD/YYYY"
+              placeholderTextColor="#9CA3AF"
             />
 
             <Text style={styles.label}>Full Name of Person</Text>
-            <TextInput style={styles.input} placeholder="e.g., John Doe" value={personName} onChangeText={handleNameChange} />
+            <TextInput style={styles.input} placeholder="e.g., John Doe" placeholderTextColor="#9CA3AF" value={personName} onChangeText={handleNameChange} />
              {nameSuggestions.length > 0 && (
                 <View style={styles.suggestionsContainer}>
                     {nameSuggestions.map((p, i) => (
@@ -122,10 +123,10 @@ export const IncidentReportForm = ({ visible, entry, onClose, onSave }) => {
             )}
 
             <Text style={styles.label}>Relationship to Person</Text>
-            <TextInput style={styles.input} placeholder="e.g., Neighbor, Colleague" value={relationship} onChangeText={setRelationship} />
+            <TextInput style={styles.input} placeholder="e.g., Neighbor, Colleague" placeholderTextColor="#9CA3AF" value={relationship} onChangeText={setRelationship} />
 
             <Text style={styles.label}>Location of Incident</Text>
-            <TextInput style={styles.input} placeholder="e.g., 123 Main St, Anytown" value={location} onChangeText={handleLocationChange} />
+            <TextInput style={styles.input} placeholder="e.g., 123 Main St, Anytown" placeholderTextColor="#9CA3AF" value={location} onChangeText={handleLocationChange} />
             {locationSuggestions.length > 0 && (
                 <View style={styles.suggestionsContainer}>
                     {locationSuggestions.map((l, i) => (
@@ -174,6 +175,7 @@ export const IncidentReportForm = ({ visible, entry, onClose, onSave }) => {
             <TextInput
               style={[styles.input, { height: 150, textAlignVertical: 'top' }]}
               placeholder="Describe what happened..."
+              placeholderTextColor="#9CA3AF"
               value={description}
               onChangeText={setDescription}
               multiline={true}
@@ -221,6 +223,7 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         marginBottom: 16,
         fontSize: 16,
+        color: '#1F2937',
       },
       label: {
           fontSize: 14,
