@@ -13,17 +13,72 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.securelocationshare",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "location",
+          "fetch",
+          "location",
+          "fetch"
+        ],
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app uses your location every 10 minutes to securely share your live position with your authorized contacts. This is necessary for real-time tracking.",
+        "NSLocationWhenInUseUsageDescription": "We need your location while the app is open to start a secure sharing session and calculate your initial position.",
+        "NSLocationAlwaysPermission": "Allowing 'Always' access ensures your live location updates can be sent to your authorized listeners every 10 minutes, even when the app is closed.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "package": "com.yourcompany.securelocationshare",
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "This app uses your location every 10 minutes to securely share your live position with your authorized contacts. This is necessary for real-time tracking.",
+          "locationWhenInUsePermission": "We need your location while the app is open to start a secure sharing session and calculate your initial position.",
+          "locationAlwaysPermission": "Allowing 'Always' access ensures your live location updates can be sent to your authorized listeners every 10 minutes, even when the app is closed.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#F472B6",
+          "sounds": [
+            "./assets/notification.wav"
+          ],
+          "mode": "production"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d3ac9fcc-bae2-49b4-a505-1f2158c24639"
+      }
     }
   }
 }

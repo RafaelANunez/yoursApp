@@ -4,7 +4,6 @@ import {
   Text,
   View,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   Modal,
   Image,
@@ -15,14 +14,67 @@ import {
   Alert,
   Animated,
 } from 'react-native';
+import { SafeAreaView, SafeAreaProvider } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Contacts from 'expo-contacts';
 import * as Location from 'expo-location';
 import * as SMS from 'expo-sms';
+import * as Notifications from 'expo-notifications';
+import * as TaskManager from 'expo-task-manager';
+import LocationHistoryPage from './components/LocationHistoryPage';
 
+// Journey Sharing V2 Components
+import JourneySharingPageV2 from './components/JourneySharing/JourneySharingPageV2';
+import TrackAFriendPage from './components/JourneySharing/TrackAFriendPage';
+import TrackingDetailPage from './components/JourneySharing/TrackingDetailPage';
 
+// Configure notifications
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
+// Background location task name
+const LOCATION_TASK_NAME = 'journey-sharing-location-update';
+const LOCATION_HISTORY_TASK_NAME = 'location-history-tracking';
+
+// Import location history utilities
+const { addLocationPing, getLocationSettings, autoDeleteOldHistory } = require('./utils/locationHistoryStorage');
+
+// Define background location history tracking task
+TaskManager.defineTask(LOCATION_HISTORY_TASK_NAME, async ({ data, error }) => {
+  if (error) {
+    console.error('Location History tracking error:', error);
+    return;
+  }
+
+  if (data) {
+    const { locations } = data;
+    if (locations && locations.length > 0) {
+      const location = locations[0];
+
+      // Check if tracking is still enabled
+      const settings = await getLocationSettings();
+      if (!settings.enabled) {
+        // Stop tracking if disabled
+        await Location.stopLocationUpdatesAsync(LOCATION_HISTORY_TASK_NAME);
+        return;
+      }
+
+      // Add location ping
+      await addLocationPing(location.coords.latitude, location.coords.longitude);
+
+      // Run auto-delete check periodically (every 10 pings)
+      if (Math.random() < 0.1) {
+        await autoDeleteOldHistory();
+      }
+    }
+  }
+});
 
 // --- SVG Icons (Converted for React Native) ---
 const MenuIcon = ({ color = '#555' }) => (
@@ -198,6 +250,51 @@ const ImportIcon = ({ color = '#555' }) => (
       strokeLinejoin="round"
     />
     <Path d="M12 15V3" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+  </Svg>
+);
+
+const MapPinIcon = ({ color = '#555' }) => (
+  <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M21 10C21 17 12 23 12 23C12 23 3 17 3 10C3 7.61305 3.94821 5.32387 5.63604 3.63604C7.32387 1.94821 9.61305 1 12 1C14.3869 1 16.6761 1.94821 18.364 3.63604C20.0518 5.32387 21 7.61305 21 10Z"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <Path
+      d="M12 13C13.6569 13 15 11.6569 15 10C15 8.34315 13.6569 7 12 7C10.3431 7 9 8.34315 9 10C9 11.6569 10.3431 13 12 13Z"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </Svg>
+);
+
+const HistoryIcon = ({ color = '#555' }) => (
+  <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+    <Path
+      d="M12 8V12L15 15"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <Path
+      d="M3.05 11C3.5 6.5 7.35 3 12 3C16.97 3 21 7.03 21 12C21 16.97 16.97 21 12 21C8.64 21 5.68 19.21 4.15 16.5"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <Path
+      d="M3 16H7V12"
+      stroke={color}
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </Svg>
 );
 
@@ -1094,6 +1191,706 @@ const ContactsPage = ({ onBack }) => {
   );
 };
 
+// --- Journey Sharing Page ---
+const JourneySharingPage = ({ onBack }) => {
+  const { contacts } = useEmergencyContacts();
+  const [isJourneyActive, setIsJourneyActive] = React.useState(false);
+  const [updateInterval, setUpdateInterval] = React.useState(5);
+  const [autoStopTime, setAutoStopTime] = React.useState(null);
+  const [selectedContacts, setSelectedContacts] = React.useState([]);
+  const [showTimePicker, setShowTimePicker] = React.useState(false);
+  const [journeyStartTime, setJourneyStartTime] = React.useState(null);
+  const [lastUpdateTime, setLastUpdateTime] = React.useState(null);
+  const [updateHistory, setUpdateHistory] = React.useState([]);
+  const [nextUpdateIn, setNextUpdateIn] = React.useState(null);
+  const [userName, setUserName] = React.useState('User');
+  const [pendingUpdate, setPendingUpdate] = React.useState(null);
+  const [discreetMode, setDiscreetMode] = React.useState(false);
+
+  const updateTimerRef = React.useRef(null);
+  const countdownTimerRef = React.useRef(null);
+  const autoStopCheckRef = React.useRef(null);
+  const notificationListener = React.useRef();
+  const responseListener = React.useRef();
+
+  const JOURNEY_STATE_KEY = '@journey_sharing_state';
+  const USER_NAME_KEY = '@user_name';
+  const PENDING_UPDATE_KEY = '@pending_journey_update';
+  const JOURNEY_NOTIFICATION_ID = 'journey-sharing-update';
+
+  React.useEffect(() => {
+    loadJourneyState();
+    loadUserName();
+    loadDiscreetMode();
+    loadPendingUpdate();
+    setupNotificationListeners();
+
+    return () => {
+      clearAllTimers();
+      if (notificationListener.current) {
+        Notifications.removeNotificationSubscription(notificationListener.current);
+      }
+      if (responseListener.current) {
+        Notifications.removeNotificationSubscription(responseListener.current);
+      }
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (isJourneyActive) {
+      startUpdateTimer();
+      startCountdownTimer();
+      if (autoStopTime) {
+        checkAutoStop();
+      }
+    } else {
+      clearAllTimers();
+    }
+  }, [isJourneyActive, updateInterval, autoStopTime]);
+
+  const loadUserName = async () => {
+    try {
+      const name = await AsyncStorage.getItem(USER_NAME_KEY);
+      if (name) setUserName(name);
+    } catch (error) {
+      console.error('Error loading user name:', error);
+    }
+  };
+
+  const loadDiscreetMode = async () => {
+    try {
+      const mode = await AsyncStorage.getItem('@discreet_mode_enabled');
+      setDiscreetMode(mode === 'true');
+    } catch (error) {
+      console.error('Error loading discreet mode:', error);
+    }
+  };
+
+  const loadPendingUpdate = async () => {
+    try {
+      const pending = await AsyncStorage.getItem(PENDING_UPDATE_KEY);
+      if (pending) {
+        setPendingUpdate(JSON.parse(pending));
+      }
+    } catch (error) {
+      console.error('Error loading pending update:', error);
+    }
+  };
+
+  const savePendingUpdate = async (update) => {
+    try {
+      if (update) {
+        await AsyncStorage.setItem(PENDING_UPDATE_KEY, JSON.stringify(update));
+        setPendingUpdate(update);
+      } else {
+        await AsyncStorage.removeItem(PENDING_UPDATE_KEY);
+        setPendingUpdate(null);
+      }
+    } catch (error) {
+      console.error('Error saving pending update:', error);
+    }
+  };
+
+  const setupNotificationListeners = () => {
+    // Listener for notifications received while app is foregrounded
+    notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+      console.log('Notification received:', notification);
+    });
+
+    // Listener for when user taps on notification
+    responseListener.current = Notifications.addNotificationResponseReceivedListener(async response => {
+      const data = response.notification.request.content.data;
+      if (data.type === 'journey_update') {
+        await handleSendPendingUpdate();
+      } else if (data.type === 'journey_end') {
+        await handleStopJourney(true);
+      }
+    });
+  };
+
+  const loadJourneyState = async () => {
+    try {
+      const state = await AsyncStorage.getItem(JOURNEY_STATE_KEY);
+      if (state) {
+        const parsed = JSON.parse(state);
+        if (parsed.isActive) {
+          setIsJourneyActive(true);
+          setUpdateInterval(parsed.updateInterval);
+          setAutoStopTime(parsed.autoStopTime);
+          setSelectedContacts(parsed.selectedContacts);
+          setJourneyStartTime(parsed.startTime);
+          setLastUpdateTime(parsed.lastUpdateTime);
+          setUpdateHistory(parsed.updateHistory || []);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading journey state:', error);
+    }
+  };
+
+  const saveJourneyState = async (state) => {
+    try {
+      await AsyncStorage.setItem(JOURNEY_STATE_KEY, JSON.stringify(state));
+    } catch (error) {
+      console.error('Error saving journey state:', error);
+    }
+  };
+
+  const clearJourneyState = async () => {
+    try {
+      await AsyncStorage.removeItem(JOURNEY_STATE_KEY);
+    } catch (error) {
+      console.error('Error clearing journey state:', error);
+    }
+  };
+
+  const clearAllTimers = () => {
+    if (updateTimerRef.current) clearInterval(updateTimerRef.current);
+    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+    if (autoStopCheckRef.current) clearInterval(autoStopCheckRef.current);
+  };
+
+  const toggleContactSelection = (contactId) => {
+    setSelectedContacts(prev =>
+      prev.includes(contactId)
+        ? prev.filter(id => id !== contactId)
+        : [...prev, contactId]
+    );
+  };
+
+  const selectAllContacts = () => {
+    if (selectedContacts.length === contacts.length) {
+      setSelectedContacts([]);
+    } else {
+      setSelectedContacts(contacts.map(c => c.id));
+    }
+  };
+
+  const getSelectedContactObjects = () => {
+    return contacts.filter(c => selectedContacts.includes(c.id));
+  };
+
+  const sendLocationMessageDirectly = async (isInitial = false, isFinal = false) => {
+    // This opens the messaging app directly (used for initial and end messages only)
+    try {
+      const location = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = location.coords;
+      const mapsLink = `https://maps.google.com/?q=${latitude},${longitude}`;
+      const timestamp = new Date().toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+
+      let message = '';
+      if (isInitial) {
+        message = `Hi, ${userName} is sharing their journey with you for safety. They are NOT in trouble - this is just a precaution.\n\nYou'll receive location updates every ${updateInterval} minute${updateInterval > 1 ? 's' : ''}.\n\nStarting location (${timestamp}):\n${mapsLink}`;
+      } else if (isFinal) {
+        message = `Journey sharing has ended. ${userName} has arrived safely.`;
+      } else {
+        message = `Location update at ${timestamp}:\n${mapsLink}`;
+      }
+
+      const recipients = getSelectedContactObjects().map(c => c.phone);
+
+      const isAvailable = await SMS.isAvailableAsync();
+      if (isAvailable) {
+        await SMS.sendSMSAsync(recipients, message);
+
+        const updateEntry = {
+          timestamp: new Date().toISOString(),
+          type: isInitial ? 'start' : isFinal ? 'end' : 'update',
+          time: timestamp
+        };
+
+        setUpdateHistory(prev => [...prev, updateEntry]);
+        setLastUpdateTime(new Date().toISOString());
+
+        if (isJourneyActive && !isFinal) {
+          await saveJourneyState({
+            isActive: true,
+            updateInterval,
+            autoStopTime,
+            selectedContacts,
+            startTime: journeyStartTime,
+            lastUpdateTime: new Date().toISOString(),
+            updateHistory: [...updateHistory, updateEntry]
+          });
+        }
+
+        return true;
+      } else {
+        Alert.alert('SMS Not Available', 'SMS is not available on this device.');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error sending location message:', error);
+      Alert.alert('Error', 'Failed to send location message. Please try again.');
+      return false;
+    }
+  };
+
+  const scheduleUpdateNotification = async () => {
+    // This is called by the timer to schedule a notification (not send SMS directly)
+    try {
+      const location = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = location.coords;
+      const mapsLink = `https://maps.google.com/?q=${latitude},${longitude}`;
+      const timestamp = new Date().toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+
+      const updateData = {
+        latitude,
+        longitude,
+        mapsLink,
+        timestamp,
+        createdAt: new Date().toISOString()
+      };
+
+      // Save as pending update
+      await savePendingUpdate(updateData);
+
+      // Schedule notification
+      const contactCount = getSelectedContactObjects().length;
+      const notificationContent = {
+        title: discreetMode ? 'Action Required' : '📍 Location Update Ready',
+        body: discreetMode ? 'Tap to continue' : `Tap to send your location update to ${contactCount} contact${contactCount > 1 ? 's' : ''}`,
+        data: { type: 'journey_update', updateData },
+        sound: !discreetMode,
+        priority: discreetMode ? 'low' : 'high',
+      };
+
+      await Notifications.scheduleNotificationAsync({
+        identifier: JOURNEY_NOTIFICATION_ID,
+        content: notificationContent,
+        trigger: null, // Show immediately
+      });
+
+      console.log('Update notification scheduled');
+    } catch (error) {
+      console.error('Error scheduling update notification:', error);
+    }
+  };
+
+  const handleSendPendingUpdate = async () => {
+    // Called when user taps notification or "Send Update Now" button
+    if (!pendingUpdate) {
+      Alert.alert('No Pending Update', 'There is no pending location update to send.');
+      return;
+    }
+
+    const { mapsLink, timestamp } = pendingUpdate;
+    const message = `Location update at ${timestamp}:\n${mapsLink}`;
+    const recipients = getSelectedContactObjects().map(c => c.phone);
+
+    try {
+      const isAvailable = await SMS.isAvailableAsync();
+      if (isAvailable) {
+        await SMS.sendSMSAsync(recipients, message);
+
+        const updateEntry = {
+          timestamp: new Date().toISOString(),
+          type: 'update',
+          time: timestamp
+        };
+
+        setUpdateHistory(prev => [...prev, updateEntry]);
+        setLastUpdateTime(new Date().toISOString());
+        await savePendingUpdate(null); // Clear pending update
+
+        if (isJourneyActive) {
+          await saveJourneyState({
+            isActive: true,
+            updateInterval,
+            autoStopTime,
+            selectedContacts,
+            startTime: journeyStartTime,
+            lastUpdateTime: new Date().toISOString(),
+            updateHistory: [...updateHistory, updateEntry]
+          });
+        }
+
+        // Clear the notification
+        await Notifications.dismissNotificationAsync(JOURNEY_NOTIFICATION_ID);
+
+        Alert.alert('Update Sent', 'Location update has been sent successfully.');
+      } else {
+        Alert.alert('SMS Not Available', 'SMS is not available on this device.');
+      }
+    } catch (error) {
+      console.error('Error sending pending update:', error);
+      Alert.alert('Error', 'Failed to send location update. Please try again.');
+    }
+  };
+
+  const startUpdateTimer = () => {
+    if (updateTimerRef.current) clearInterval(updateTimerRef.current);
+
+    updateTimerRef.current = setInterval(() => {
+      scheduleUpdateNotification(); // Changed to schedule notification instead
+    }, updateInterval * 60 * 1000);
+  };
+
+  const startCountdownTimer = () => {
+    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+
+    countdownTimerRef.current = setInterval(() => {
+      if (lastUpdateTime) {
+        const lastUpdate = new Date(lastUpdateTime);
+        const now = new Date();
+        const nextUpdate = new Date(lastUpdate.getTime() + updateInterval * 60 * 1000);
+        const diff = nextUpdate - now;
+
+        if (diff > 0) {
+          const minutes = Math.floor(diff / 60000);
+          const seconds = Math.floor((diff % 60000) / 1000);
+          setNextUpdateIn(`${minutes}:${seconds.toString().padStart(2, '0')}`);
+        } else {
+          setNextUpdateIn('Sending...');
+        }
+      }
+    }, 1000);
+  };
+
+  const checkAutoStop = () => {
+    if (autoStopCheckRef.current) clearInterval(autoStopCheckRef.current);
+
+    autoStopCheckRef.current = setInterval(() => {
+      if (autoStopTime) {
+        const now = new Date();
+        const [hours, minutes] = autoStopTime.split(':');
+        const stopTime = new Date();
+        stopTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+
+        if (now >= stopTime) {
+          handleStopJourney(true);
+        }
+      }
+    }, 30000); // Check every 30 seconds
+  };
+
+  const handleStartJourney = async () => {
+    if (selectedContacts.length === 0) {
+      Alert.alert('No Contacts Selected', 'Please select at least one emergency contact to share your journey with.');
+      return;
+    }
+
+    // Check notification permission
+    const { status: notificationStatus } = await Notifications.getPermissionsAsync();
+    if (notificationStatus !== 'granted') {
+      const { status: newStatus } = await Notifications.requestPermissionsAsync();
+      if (newStatus !== 'granted') {
+        Alert.alert(
+          'Notification Permission Required',
+          'Journey Sharing requires notification permission to alert you when it\'s time to send location updates. Please enable notifications in your device settings.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+    }
+
+    // Check location permission
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        'Location Permission Required',
+        'Journey Sharing needs location access to share your location. Please enable location permissions in your device settings.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
+    // Request background location permission
+    const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
+    if (backgroundStatus !== 'granted') {
+      Alert.alert(
+        'Background Location Recommended',
+        'For Journey Sharing to work when the app is in the background, please enable "Allow all the time" for location access in your device settings. You can continue without this, but you\'ll need to keep the app open.',
+        [{ text: 'OK' }]
+      );
+    }
+
+    const startTime = new Date().toISOString();
+    setJourneyStartTime(startTime);
+    setIsJourneyActive(true);
+    setLastUpdateTime(startTime);
+    setUpdateHistory([]);
+
+    await saveJourneyState({
+      isActive: true,
+      updateInterval,
+      autoStopTime,
+      selectedContacts,
+      startTime,
+      lastUpdateTime: startTime,
+      updateHistory: []
+    });
+
+    // Send initial message directly (not via notification)
+    await sendLocationMessageDirectly(true, false);
+  };
+
+  const handleStopJourney = async (isAutoStop = false) => {
+    clearAllTimers();
+
+    // Clear all journey-related notifications
+    await Notifications.dismissAllNotificationsAsync();
+    await Notifications.cancelAllScheduledNotificationsAsync();
+
+    // Send end message directly
+    await sendLocationMessageDirectly(false, true);
+
+    setIsJourneyActive(false);
+    setJourneyStartTime(null);
+    setLastUpdateTime(null);
+    setUpdateHistory([]);
+    setNextUpdateIn(null);
+    await savePendingUpdate(null); // Clear any pending updates
+
+    await clearJourneyState();
+
+    if (!isAutoStop) {
+      Alert.alert('Journey Ended', 'Journey sharing has been stopped and your contacts have been notified.');
+    } else {
+      Alert.alert('Journey Auto-Stopped', 'Journey sharing has ended at the scheduled time.');
+    }
+  };
+
+  const formatTimeForDisplay = (timeString) => {
+    if (!timeString) return 'Not set';
+    const [hours, minutes] = timeString.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${minutes} ${ampm}`;
+  };
+
+  const renderInitialState = () => (
+    <ScrollView style={styles.journeyContainer}>
+      <View style={styles.journeySection}>
+        <Text style={styles.journeyBlurb}>
+          Journey Sharing allows you to automatically share your location with trusted contacts at regular intervals. Perfect for dates, walking alone, or any situation where you want someone to know where you are.{'\n\n'}
+          Your contacts will receive location updates via text message at the interval you choose.
+        </Text>
+      </View>
+
+      <View style={styles.journeySection}>
+        <Text style={styles.journeySectionTitle}>Settings</Text>
+
+        <View style={styles.journeySettingItem}>
+          <Text style={styles.journeyLabel}>Send location updates every:</Text>
+          <View style={styles.intervalButtons}>
+            {[1, 5, 10, 15, 30].map((interval) => (
+              <TouchableOpacity
+                key={interval}
+                style={[
+                  styles.intervalButton,
+                  updateInterval === interval && styles.intervalButtonActive
+                ]}
+                onPress={() => setUpdateInterval(interval)}
+              >
+                <Text style={[
+                  styles.intervalButtonText,
+                  updateInterval === interval && styles.intervalButtonTextActive
+                ]}>
+                  {interval}m
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.journeySettingItem}>
+          <Text style={styles.journeyLabel}>Automatically stop at: (Optional)</Text>
+          <TouchableOpacity
+            style={styles.timePickerButton}
+            onPress={() => setShowTimePicker(!showTimePicker)}
+          >
+            <Text style={styles.timePickerButtonText}>
+              {autoStopTime ? formatTimeForDisplay(autoStopTime) : 'Tap to set time'}
+            </Text>
+          </TouchableOpacity>
+          {showTimePicker && (
+            <View style={styles.timePickerContainer}>
+              <TextInput
+                style={styles.timeInput}
+                placeholder="HH:MM (24-hour format)"
+                value={autoStopTime || ''}
+                onChangeText={(text) => {
+                  if (text.match(/^[0-9:]*$/)) {
+                    setAutoStopTime(text);
+                  }
+                }}
+                maxLength={5}
+              />
+              <TouchableOpacity
+                style={styles.clearTimeButton}
+                onPress={() => {
+                  setAutoStopTime(null);
+                  setShowTimePicker(false);
+                }}
+              >
+                <Text style={styles.clearTimeButtonText}>Clear</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.journeySettingItem}>
+          <Text style={styles.journeyLabel}>Share with:</Text>
+          {contacts.length === 0 ? (
+            <Text style={styles.journeyWarning}>
+              Please add at least one emergency contact in Settings before using Journey Sharing
+            </Text>
+          ) : (
+            <>
+              <TouchableOpacity
+                style={styles.selectAllButton}
+                onPress={selectAllContacts}
+              >
+                <Text style={styles.selectAllButtonText}>
+                  {selectedContacts.length === contacts.length ? 'Deselect All' : 'Select All Emergency Contacts'}
+                </Text>
+              </TouchableOpacity>
+
+              {contacts.map((contact) => (
+                <TouchableOpacity
+                  key={contact.id}
+                  style={styles.contactCheckItem}
+                  onPress={() => toggleContactSelection(contact.id)}
+                >
+                  <View style={styles.contactCheckInfo}>
+                    <Text style={styles.contactCheckName}>{contact.name}</Text>
+                    <Text style={styles.contactCheckPhone}>{contact.phone}</Text>
+                  </View>
+                  <View style={[
+                    styles.contactCheckbox,
+                    selectedContacts.includes(contact.id) && styles.contactCheckboxChecked
+                  ]}>
+                    {selectedContacts.includes(contact.id) && (
+                      <Text style={styles.checkmark}>✓</Text>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </>
+          )}
+        </View>
+
+        <View style={styles.batteryWarning}>
+          <Text style={styles.batteryWarningIcon}>⚠️</Text>
+          <Text style={styles.batteryWarningTitle}>Battery Usage Notice</Text>
+          <Text style={styles.batteryWarningText}>
+            Journey Sharing uses GPS continuously and will drain your battery faster than normal. You'll receive notifications when it's time to send updates - make sure notifications are enabled and not silenced. Keep your phone charged or bring a battery pack for longer journeys.
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.startJourneyButton,
+            (contacts.length === 0 || selectedContacts.length === 0) && styles.startJourneyButtonDisabled
+          ]}
+          onPress={handleStartJourney}
+          disabled={contacts.length === 0 || selectedContacts.length === 0}
+        >
+          <Text style={styles.startJourneyButtonText}>Start Journey Sharing</Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+
+  const renderActiveState = () => (
+    <ScrollView style={styles.journeyContainer}>
+      <View style={styles.journeyActiveHeader}>
+        <Text style={styles.journeyActiveIcon}>🟢</Text>
+        <Text style={styles.journeyActiveTitle}>Journey Sharing Active</Text>
+      </View>
+
+      <View style={styles.journeySection}>
+        <Text style={styles.journeySectionTitle}>Journey Information</Text>
+
+        <View style={styles.journeyInfoItem}>
+          <Text style={styles.journeyInfoLabel}>Update Interval:</Text>
+          <Text style={styles.journeyInfoValue}>Every {updateInterval} minute{updateInterval > 1 ? 's' : ''}</Text>
+        </View>
+
+        <View style={styles.journeyInfoItem}>
+          <Text style={styles.journeyInfoLabel}>Sharing With:</Text>
+          <View>
+            {getSelectedContactObjects().map((contact) => (
+              <Text key={contact.id} style={styles.journeyInfoValue}>• {contact.name}</Text>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.journeyInfoItem}>
+          <Text style={styles.journeyInfoLabel}>Auto-Stop:</Text>
+          <Text style={styles.journeyInfoValue}>
+            {autoStopTime ? `Will stop at ${formatTimeForDisplay(autoStopTime)}` : 'Running until manually stopped'}
+          </Text>
+        </View>
+
+        {nextUpdateIn && (
+          <View style={styles.nextUpdateBox}>
+            <Text style={styles.nextUpdateLabel}>Next update in:</Text>
+            <Text style={styles.nextUpdateTime}>{nextUpdateIn}</Text>
+          </View>
+        )}
+
+        {pendingUpdate && (
+          <View style={styles.pendingUpdateBox}>
+            <Text style={styles.pendingUpdateIcon}>⚠️</Text>
+            <Text style={styles.pendingUpdateText}>
+              Location update is ready to send!{'\n'}
+              Tap the button below or check your notifications.
+            </Text>
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={styles.sendNowButton}
+          onPress={handleSendPendingUpdate}
+        >
+          <Text style={styles.sendNowButtonText}>📍 Send Update Now</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.journeySection}>
+        <Text style={styles.journeySectionTitle}>Update History</Text>
+        {updateHistory.length === 0 ? (
+          <Text style={styles.journeyInfoValue}>No updates sent yet</Text>
+        ) : (
+          updateHistory.slice().reverse().map((entry, index) => (
+            <View key={index} style={styles.historyEntry}>
+              <Text style={styles.historyCheckmark}>✓</Text>
+              <Text style={styles.historyText}>
+                {entry.type === 'start' ? 'Journey started' : 'Update sent'} at {entry.time}
+              </Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      <TouchableOpacity
+        style={styles.stopJourneyButton}
+        onPress={() => handleStopJourney(false)}
+      >
+        <Text style={styles.stopJourneyButtonText}>Stop Journey Sharing</Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+
+  return (
+    <View style={styles.fullPage}>
+      <PageHeader title="Journey Sharing" onBack={onBack} />
+      {isJourneyActive ? renderActiveState() : renderInitialState()}
+    </View>
+  );
+};
+
 // --- Sudoku Puzzles Data ---
 const SUDOKU_PUZZLES = [
   // Puzzle 1 (0 = empty cell)
@@ -1398,6 +2195,14 @@ const SideMenu = ({ isOpen, onClose, onNavigate }) => (
                 <Text style={styles.profileName}>Jessica Jones</Text>
             </View>
             <View style={styles.sideMenuNav}>
+                <TouchableOpacity style={styles.sideMenuLink} onPress={() => onNavigate('JourneySharing')}>
+                    <MapPinIcon color="#374151" />
+                    <Text style={styles.sideMenuLinkText}>Journey Sharing</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.sideMenuLink} onPress={() => onNavigate('LocationHistory')}>
+                    <HistoryIcon color="#374151" />
+                    <Text style={styles.sideMenuLinkText}>Location History</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.sideMenuLink} onPress={() => onNavigate('Contacts')}>
                     <ContactIcon color="#374151" />
                     <Text style={styles.sideMenuLinkText}>Emergency Contacts</Text>
@@ -1415,6 +2220,7 @@ const SideMenu = ({ isOpen, onClose, onNavigate }) => (
 // --- Main App Component ---
 export default function App() {
   const [currentPage, setCurrentPage] = React.useState('Home');
+  const [navigationParams, setNavigationParams] = React.useState(null);
   const [isMenuOpen, setMenuOpen] = React.useState(false);
   const [showSudoku, setShowSudoku] = React.useState(false);
   const [isCheckingSettings, setIsCheckingSettings] = React.useState(true);
@@ -1523,6 +2329,12 @@ export default function App() {
 
   const renderPage = () => {
     const goHome = () => setCurrentPage('Home');
+    const goBack = () => setCurrentPage('JourneySharing');
+
+    const handleNavigate = (page, params = null) => {
+      setCurrentPage(page);
+      setNavigationParams(params);
+    };
 
     switch (currentPage) {
       case 'Journal': return <JournalPage onBack={goHome} />;
@@ -1531,6 +2343,10 @@ export default function App() {
       case 'Settings': return <SettingsPage onBack={goHome} />;
       case 'Contacts': return <ContactsPage onBack={goHome} />;
       case 'DiscreetMode': return <DiscreetModeSettingsPage onBack={goHome} />;
+      case 'JourneySharing': return <JourneySharingPageV2 onBack={goHome} onNavigate={handleNavigate} />;
+      case 'TrackAFriend': return <TrackAFriendPage onBack={goBack} onNavigate={handleNavigate} />;
+      case 'TrackingDetail': return <TrackingDetailPage onBack={goBack} sessionId={navigationParams} />;
+      case 'LocationHistory': return <LocationHistoryPage onBack={goHome} />;
       default: return <HomePage />;
     }
   };
@@ -1556,46 +2372,48 @@ export default function App() {
   }
 
   return (
-    <EmergencyContactsProvider>
-      <View
-        style={styles.container}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-      >
-        <SafeAreaView style={styles.container}>
-          <StatusBar barStyle="dark-content" backgroundColor="#FEF2F2" />
-          {currentPage === 'Home' && <AppHeader onMenuPress={() => setMenuOpen(true)} title="Yours" />}
+    <SafeAreaProvider>
+      <EmergencyContactsProvider>
+        <View
+          style={styles.container}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+        >
+          <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="dark-content" backgroundColor="#FEF2F2" />
+            {currentPage === 'Home' && <AppHeader onMenuPress={() => setMenuOpen(true)} title="Yours" />}
 
-          <View style={styles.contentArea}>
-            {renderPage()}
-          </View>
-
-          {currentPage === 'Home' && (
-            <View style={styles.bottomNav}>
-              <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Journal')}>
-                <JournalIcon />
-                <Text style={styles.navButtonText}>Journal</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Panic')}>
-                <AlertIcon />
-                <Text style={styles.navButtonText}>Panic</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Timer')}>
-                <TimerIcon />
-                <Text style={styles.navButtonText}>Timer</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Settings')}>
-                <SettingsIcon />
-                <Text style={styles.navButtonText}>Settings</Text>
-              </TouchableOpacity>
+            <View style={styles.contentArea}>
+              {renderPage()}
             </View>
-          )}
 
-          <SideMenu isOpen={isMenuOpen} onClose={() => setMenuOpen(false)} onNavigate={handleMenuNavigation}/>
-        </SafeAreaView>
-      </View>
-    </EmergencyContactsProvider>
+            {currentPage === 'Home' && (
+              <View style={styles.bottomNav}>
+                <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Journal')}>
+                  <JournalIcon />
+                  <Text style={styles.navButtonText}>Journal</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Panic')}>
+                  <AlertIcon />
+                  <Text style={styles.navButtonText}>Panic</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Timer')}>
+                  <TimerIcon />
+                  <Text style={styles.navButtonText}>Timer</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Settings')}>
+                  <SettingsIcon />
+                  <Text style={styles.navButtonText}>Settings</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            <SideMenu isOpen={isMenuOpen} onClose={() => setMenuOpen(false)} onNavigate={handleMenuNavigation}/>
+          </SafeAreaView>
+        </View>
+      </EmergencyContactsProvider>
+    </SafeAreaProvider>
   );
 }
 
@@ -2265,6 +3083,324 @@ const styles = StyleSheet.create({
   },
   numberButtonText: {
     fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  // Journey Sharing Styles
+  journeyContainer: {
+    flex: 1,
+    padding: 20,
+  },
+  journeySection: {
+    marginBottom: 24,
+  },
+  journeyBlurb: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#374151',
+    textAlign: 'left',
+  },
+  journeySectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 16,
+  },
+  journeySettingItem: {
+    marginBottom: 20,
+  },
+  journeyLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  intervalButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  intervalButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#D1D5DB',
+    backgroundColor: 'white',
+  },
+  intervalButtonActive: {
+    borderColor: '#F472B6',
+    backgroundColor: '#FEF2F2',
+  },
+  intervalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  intervalButtonTextActive: {
+    color: '#F472B6',
+  },
+  timePickerButton: {
+    padding: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    backgroundColor: 'white',
+  },
+  timePickerButtonText: {
+    fontSize: 16,
+    color: '#374151',
+  },
+  timePickerContainer: {
+    marginTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  timeInput: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    fontSize: 16,
+  },
+  clearTimeButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#EF4444',
+  },
+  clearTimeButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  journeyWarning: {
+    fontSize: 14,
+    color: '#EF4444',
+    fontStyle: 'italic',
+    marginTop: 8,
+  },
+  selectAllButton: {
+    padding: 12,
+    borderRadius: 8,
+    backgroundColor: '#F3F4F6',
+    marginBottom: 12,
+  },
+  selectAllButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    textAlign: 'center',
+  },
+  contactCheckItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: 'white',
+    borderRadius: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  contactCheckInfo: {
+    flex: 1,
+  },
+  contactCheckName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  contactCheckPhone: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  contactCheckbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#D1D5DB',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  contactCheckboxChecked: {
+    backgroundColor: '#F472B6',
+    borderColor: '#F472B6',
+  },
+  checkmark: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  batteryWarning: {
+    backgroundColor: '#FEF3C7',
+    padding: 16,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+    marginBottom: 20,
+  },
+  batteryWarningIcon: {
+    fontSize: 24,
+    marginBottom: 8,
+  },
+  batteryWarningTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#92400E',
+    marginBottom: 8,
+  },
+  batteryWarningText: {
+    fontSize: 13,
+    color: '#78350F',
+    lineHeight: 18,
+  },
+  startJourneyButton: {
+    backgroundColor: '#F472B6',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    elevation: 3,
+    shadowColor: '#F472B6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  startJourneyButtonDisabled: {
+    backgroundColor: '#E5E7EB',
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  startJourneyButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  journeyActiveHeader: {
+    backgroundColor: '#ECFDF5',
+    padding: 20,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 24,
+    borderWidth: 2,
+    borderColor: '#10B981',
+  },
+  journeyActiveIcon: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  journeyActiveTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#065F46',
+  },
+  journeyInfoItem: {
+    marginBottom: 16,
+  },
+  journeyInfoLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  journeyInfoValue: {
+    fontSize: 16,
+    color: '#1F2937',
+  },
+  nextUpdateBox: {
+    backgroundColor: '#FEF2F2',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 16,
+    borderWidth: 2,
+    borderColor: '#FBCFE8',
+  },
+  nextUpdateLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  nextUpdateTime: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#F472B6',
+    letterSpacing: 2,
+  },
+  historyEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  historyCheckmark: {
+    fontSize: 18,
+    color: '#10B981',
+    marginRight: 12,
+  },
+  historyText: {
+    fontSize: 14,
+    color: '#374151',
+  },
+  stopJourneyButton: {
+    backgroundColor: '#EF4444',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 40,
+    elevation: 3,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  stopJourneyButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+  pendingUpdateBox: {
+    backgroundColor: '#FEF3C7',
+    padding: 16,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  pendingUpdateIcon: {
+    fontSize: 24,
+    marginBottom: 8,
+  },
+  pendingUpdateText: {
+    fontSize: 14,
+    color: '#92400E',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  sendNowButton: {
+    backgroundColor: '#10B981',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 16,
+    elevation: 3,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  sendNowButtonText: {
+    fontSize: 16,
     fontWeight: 'bold',
     color: 'white',
   },
