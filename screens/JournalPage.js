@@ -5,7 +5,7 @@ import { PageHeader } from '../components/PageHeader';
 import { JournalTemplateModal } from '../components/JournalTemplateModal';
 import { JournalEntryForm } from '../components/JournalEntryForm';
 import { IncidentReportForm } from '../components/IncidentReportForm';
-import { JournalIcon, EditIcon, DeleteIcon } from '../components/icons';
+import { JournalIcon, EditIcon, DeleteIcon } from '../components/Icons';
 
 export const JournalPage = ({ onBack }) => {
   const { entries, isLoading, addEntry, updateEntry, deleteEntry } = useJournal();

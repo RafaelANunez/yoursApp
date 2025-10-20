@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { MenuIcon } from './icons';
+import { MenuIcon } from './Icons';
 
 export const AppHeader = ({ onMenuPress, title }) => (
   <View style={styles.appHeader}>

@@ -14,7 +14,7 @@ import SudokuScreen from './screens/SudokuScreen';
 import { JournalProvider } from './context/JournalContext';
 import { EmergencyContactsProvider } from './context/EmergencyContactsContext';
 import { AutofillProvider } from './context/AutofillContext';
-import { JournalIcon, AlertIcon, TimerIcon, SettingsIcon } from './components/icons';
+import { JournalIcon, AlertIcon, TimerIcon, SettingsIcon } from './components/Icons';
 import { VolumeManager } from 'react-native-volume-manager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import FakeCallSettingsPage from './screens/FakeCallSettingsPage';

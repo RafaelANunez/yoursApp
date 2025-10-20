@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Alert, Animated, Image } from
 import * as Location from 'expo-location';
 import * as SMS from 'expo-sms';
 import { useEmergencyContacts } from '../context/EmergencyContactsContext';
-import { MenuIcon } from '../components/icons';
+import { MenuIcon } from '../components/Icons';
 
 export const PanicPage = ({ onBack }) => {
   const { contacts } = useEmergencyContacts();

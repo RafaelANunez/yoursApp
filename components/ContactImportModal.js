@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Modal, FlatList, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { CloseIcon } from './icons';
+import { CloseIcon } from './Icons';
 import { useEmergencyContacts } from '../context/EmergencyContactsContext';
 
 export const ContactImportModal = ({ visible, onClose }) => {

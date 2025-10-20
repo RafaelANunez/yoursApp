@@ -12,7 +12,7 @@ import {
   SpeakerIcon,
   MuteIcon,
   KeypadIcon,
-} from '../components/icons';
+} from '../components/Icons';
 
 // In-call action button component
 const InCallButton = ({ icon, text, onPress, isActive }) => (
