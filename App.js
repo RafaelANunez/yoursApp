@@ -15,14 +15,28 @@ import { JournalProvider } from './context/JournalContext';
 import { EmergencyContactsProvider } from './context/EmergencyContactsContext';
 import { AutofillProvider } from './context/AutofillContext';
 import { JournalIcon, AlertIcon, TimerIcon, SettingsIcon } from './components/Icons';
-import { VolumeManager } from 'react-native-volume-manager';
+// Conditional import for VolumeManager - only works in development builds with the native module linked.
+// Use require in a try/catch so the app won't crash in Expo or when the native module isn't available.
+let VolumeManager = null;
+try {
+  const volumeModule = require('react-native-volume-manager');
+  // module may export as { VolumeManager } or default or the module itself
+  VolumeManager = volumeModule.VolumeManager || volumeModule.default || volumeModule;
+} catch (error) {
+  console.log('VolumeManager not available (Expo Go or not linked) - volume button features disabled');
+}
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import FakeCallSettingsPage from './screens/FakeCallSettingsPage';
 import BackupAndRestorePage from './screens/BackupAndRestorePage';
+import JourneySharingPageV2 from './components/JourneySharing/JourneySharingPageV2';
+import TrackAFriendPage from './components/JourneySharing/TrackAFriendPage';
+import TrackingDetailPage from './components/JourneySharing/TrackingDetailPage';
+import LocationHistoryPage from './components/LocationHistoryPage';
 
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('Home');
+  const [navigationParams, setNavigationParams] = useState(null);
   const [isMenuOpen, setMenuOpen] = useState(false);
   const [isFakeCallActive, setFakeCallActive] = useState(false);
   const [showSudoku, setShowSudoku] = useState(false);
@@ -75,7 +89,15 @@ export default function App() {
 
   // --- Volume listener effect ---
   useEffect(() => {
-    VolumeManager.enable(true);
+    if (!VolumeManager || !VolumeManager.addVolumeListener) {
+      console.log('VolumeManager not available - skipping volume listener setup');
+      return;
+    }
+    try {
+      if (typeof VolumeManager.enable === 'function') VolumeManager.enable(true);
+    } catch (err) {
+      console.log('VolumeManager.enable() failed:', err);
+    }
     const volumeListener = VolumeManager.addVolumeListener((result) => {
       const {
         isFakeCallActive: isFakeCallActiveNow,
@@ -115,7 +137,9 @@ export default function App() {
     });
 
     return () => {
-      volumeListener.remove();
+      if (volumeListener && typeof volumeListener.remove === 'function') {
+        volumeListener.remove();
+      }
       if (volumeHoldTimeout.current) {
         clearTimeout(volumeHoldTimeout.current);
       }
@@ -221,6 +245,10 @@ export default function App() {
 
   const renderPage = () => {
     const goHome = () => setCurrentPage('Home');
+    const handleNavigate = (page, params = null) => {
+      setCurrentPage(page);
+      setNavigationParams(params);
+    };
     if (isFakeCallActive) {
       return <FakeCallScreen onEndCall={() => setFakeCallActive(false)} callerName={callerName} />;
     }
@@ -235,6 +263,10 @@ export default function App() {
       case 'Contacts': return <ContactsPage onBack={goHome} />;
       case 'DiscreetMode': return <DiscreetModeSettingsPage onBack={goHome} />;
       case 'BackupAndRestore': return <BackupAndRestorePage onBack={() => setCurrentPage('Settings')} />;
+      case 'JourneySharing': return <JourneySharingPageV2 onBack={goHome} onNavigate={handleNavigate} />;
+      case 'TrackAFriend': return <TrackAFriendPage onBack={() => setCurrentPage('JourneySharing')} onNavigate={handleNavigate} />;
+      case 'TrackingDetail': return <TrackingDetailPage onBack={() => setCurrentPage('JourneySharing')} sessionId={navigationParams} />;
+      case 'LocationHistory': return <LocationHistoryPage onBack={goHome} />;
       case 'FakeCallSettings':
           return (
             <FakeCallSettingsPage

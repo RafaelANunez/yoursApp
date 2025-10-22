@@ -26,6 +26,14 @@ export const SideMenu = ({ isOpen, onClose, onNavigate }) => (
                     <ContactIcon color="#374151" />
                     <Text style={styles.sideMenuLinkText}>Emergency Contacts</Text>
                 </TouchableOpacity>
+                <TouchableOpacity style={styles.sideMenuLink} onPress={() => onNavigate('JourneySharing')}>
+                    <Text style={styles.menuIcon}>📍</Text>
+                    <Text style={styles.sideMenuLinkText}>Journey Sharing</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.sideMenuLink} onPress={() => onNavigate('LocationHistory')}>
+                    <Text style={styles.menuIcon}>🗺️</Text>
+                    <Text style={styles.sideMenuLinkText}>Location History</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.sideMenuLink} onPress={() => onNavigate('DiscreetMode')}>
                     <EyeOffIcon color="#374151" />
                     <Text style={styles.sideMenuLinkText}>Discreet Mode</Text>
@@ -92,5 +100,11 @@ const styles = StyleSheet.create({
         fontSize: 18,
         color: '#374151',
         marginLeft: 16,
+      },
+      menuIcon: {
+        fontSize: 24,
+        width: 24,
+        height: 24,
+        textAlign: 'center',
       },
 });
