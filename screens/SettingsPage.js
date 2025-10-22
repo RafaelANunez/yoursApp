@@ -1,20 +1,38 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { PageHeader } from '../components/PageHeader';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export const SettingsPage = ({ onBack, setCurrentPage }) => (
-  <View style={styles.fullPage}>
-    <PageHeader title="Settings" onBack={onBack} />
-    <View style={styles.pageContainer}>
-      <TouchableOpacity onPress={() => setCurrentPage('FakeCallSettings')}>
-        <Text style={styles.linkText}>Fake Call Settings</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={{marginTop: 20}} onPress={() => setCurrentPage('BackupAndRestore')}>
-        <Text style={styles.linkText}>Backup & Restore</Text>
-      </TouchableOpacity>
+export const SettingsPage = ({ navigation, onBack, setCurrentPage }) => {
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.removeItem('@logged_in');
+      // Optionally preserve credentials but clear logged in flag
+      navigation.replace('Login');
+    } catch (e) {
+      console.warn('Logout failed', e);
+      Alert.alert('Error', 'Could not log out');
+    }
+  };
+
+  return (
+    <View style={styles.fullPage}>
+      <PageHeader title="Settings" onBack={onBack} />
+      <View style={styles.pageContainer}>
+        <TouchableOpacity onPress={() => setCurrentPage('FakeCallSettings')}>
+          <Text style={styles.linkText}>Fake Call Settings</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={{marginTop: 20}} onPress={() => setCurrentPage('BackupAndRestore')}>
+          <Text style={styles.linkText}>Backup & Restore</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={{marginTop: 24}} onPress={handleLogout}>
+          <Text style={[styles.linkText, { color: '#EF4444' }]}>Log out</Text>
+        </TouchableOpacity>
+      </View>
     </View>
-  </View>
-);
+  );
+};
 
 const styles = StyleSheet.create({
     fullPage: {
@@ -36,3 +54,9 @@ const styles = StyleSheet.create({
         minWidth: 200,
     },
 });
+
+
+/* const handleLogout = async (navigation) => {
+  await AsyncStorage.removeItem('@logged_in');
+  navigation.replace('Login');
+}; */
