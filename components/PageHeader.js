@@ -1,14 +1,17 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export const PageHeader = ({ title, onBack }) => (
-  <View style={styles.appHeader}>
-    <TouchableOpacity onPress={onBack} style={styles.headerButton}>
-      <Text style={styles.backButtonText}>‹</Text>
-    </TouchableOpacity>
-    <Text style={styles.headerTitle}>{title}</Text>
-    <View style={styles.headerSpacer} />
-  </View>
+  <SafeAreaView edges={["top"]} style={styles.safeArea}>
+    <View style={styles.appHeader}>
+      <TouchableOpacity onPress={onBack} style={styles.headerButton}>
+        <Text style={styles.backButtonText}>‹</Text>
+      </TouchableOpacity>
+      <Text style={styles.headerTitle}>{title}</Text>
+      <View style={styles.headerSpacer} />
+    </View>
+  </SafeAreaView>
 );
 
 const styles = StyleSheet.create({
@@ -20,6 +23,9 @@ const styles = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: '#FFE4E6',
         backgroundColor: '#FEF2F2',
+      },
+      safeArea: {
+        backgroundColor: '#FEF2F2'
       },
       headerTitle: {
         fontSize: 20,
