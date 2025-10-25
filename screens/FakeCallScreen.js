@@ -12,7 +12,7 @@ import {
   SpeakerIcon,
   MuteIcon,
   KeypadIcon,
-} from '../components/icons';
+} from '../components/Icons';
 
 // In-call action button component
 const InCallButton = ({ icon, text, onPress, isActive }) => (
@@ -49,7 +49,7 @@ const Keypad = ({ onKeyPress, onHide }) => {
   );
 };
 
-export const FakeCallScreen = ({ onEndCall }) => {
+export const FakeCallScreen = ({ onEndCall, callerName }) => { // Receive callerName as a prop
   const [callState, setCallState] = useState('incoming'); // 'incoming', 'answered', 'ended'
   const [timer, setTimer] = useState(0);
   const [sound, setSound] = useState();
@@ -189,9 +189,9 @@ export const FakeCallScreen = ({ onEndCall }) => {
     <View style={[styles.container, styles.gradient]}>
       <View style={styles.header}><Text style={styles.headerText}>Incoming call</Text></View>
       <View style={styles.callerInfoContainer}>
-        <Text style={styles.callerName}>Tech Maniac</Text>
+        <Text style={styles.callerName}>{callerName}</Text>
         <Text style={styles.callerSubtext}>Mobile</Text>
-        <Image source={{ uri: "https://placehold.co/100x100/eab308/000000?text=TM" }} style={styles.avatar} />
+        <Image source={{ uri: `https://placehold.co/100x100/eab308/000000?text=${callerName.substring(0,2)}` }} style={styles.avatar} />
       </View>
       <View style={styles.actionsContainer}>
         <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
@@ -212,9 +212,9 @@ export const FakeCallScreen = ({ onEndCall }) => {
     <View style={[styles.container, styles.gradient]}>
       <View style={styles.header}><Text style={styles.headerText}>{formatTime()}</Text></View>
       <View style={styles.callerInfoContainer}>
-        <Text style={styles.callerName}>Tech Maniac</Text>
+        <Text style={styles.callerName}>{callerName}</Text>
         <Text style={styles.callerSubtext}>Mobile</Text>
-        <Image source={{ uri: "https://placehold.co/100x100/eab308/000000?text=TM" }} style={styles.avatar} />
+        <Image source={{ uri: `https://placehold.co/100x100/eab308/000000?text=${callerName.substring(0,2)}` }} style={styles.avatar} />
         {isKeypadVisible && <Text style={styles.keypadDisplay}>{keypadInput}</Text>}
       </View>
       <View style={styles.inCallActions}>
@@ -243,7 +243,7 @@ export const FakeCallScreen = ({ onEndCall }) => {
 
   const renderEndedCall = () => (
     <View style={[styles.container, { backgroundColor: '#111' }]}>
-      <View style={styles.callerInfoContainer}><Text style={styles.callerName}>Tech Maniac</Text><Text style={[styles.callerSubtext, { color: 'red', marginTop: 10, fontSize: 18 }]}>Call ended</Text></View>
+      <View style={styles.callerInfoContainer}><Text style={styles.callerName}>{callerName}</Text><Text style={[styles.callerSubtext, { color: 'red', marginTop: 10, fontSize: 18 }]}>Call ended</Text></View>
     </View>
   );
 

@@ -4,7 +4,7 @@ import { PageHeader } from '../components/PageHeader';
 import { ContactFormModal } from '../components/ContactFormModal';
 import { ContactImportModal } from '../components/ContactImportModal';
 import { useEmergencyContacts } from '../context/EmergencyContactsContext';
-import { ContactIcon, EditIcon, DeleteIcon, ImportIcon } from '../components/icons';
+import { ContactIcon, EditIcon, DeleteIcon, ImportIcon } from '../components/Icons';
 
 const PageContainer = ({ children }) => (
     <View style={styles.pageContainer}>{children}</View>

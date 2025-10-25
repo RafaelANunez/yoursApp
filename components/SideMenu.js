@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, Modal, TouchableOpacity, StyleSheet, Pressable, Image } from 'react-native';
-import { CloseIcon, ContactIcon, EyeOffIcon } from './icons';
+import { CloseIcon, ContactIcon, EyeOffIcon } from './Icons';
 
 export const SideMenu = ({ isOpen, onClose, onNavigate }) => (
   <Modal

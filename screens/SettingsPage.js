@@ -1,17 +1,18 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { PageHeader } from '../components/PageHeader';
 
-const PageContainer = ({ children }) => (
-    <View style={styles.pageContainer}>{children}</View>
-);
-
-export const SettingsPage = ({ onBack }) => (
+export const SettingsPage = ({ onBack, setCurrentPage }) => (
   <View style={styles.fullPage}>
     <PageHeader title="Settings" onBack={onBack} />
-    <PageContainer>
-      <Text style={styles.pageText}>App settings and options will be here.</Text>
-    </PageContainer>
+    <View style={styles.pageContainer}>
+      <TouchableOpacity onPress={() => setCurrentPage('FakeCallSettings')}>
+        <Text style={styles.linkText}>Fake Call Settings</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={{marginTop: 20}} onPress={() => setCurrentPage('BackupAndRestore')}>
+        <Text style={styles.linkText}>Backup & Restore</Text>
+      </TouchableOpacity>
+    </View>
   </View>
 );
 
@@ -22,12 +23,16 @@ const styles = StyleSheet.create({
     pageContainer: {
         flex: 1,
         alignItems: 'center',
-        justifyContent: 'center',
         padding: 20,
-        textAlign: 'center',
     },
-    pageText: {
-        fontSize: 16,
-        color: '#6B7280',
+    linkText: {
+        fontSize: 18,
+        color: '#F87171',
+        padding: 15,
+        borderWidth: 1,
+        borderColor: '#FEE2E2',
+        borderRadius: 8,
+        textAlign: 'center',
+        minWidth: 200,
     },
 });

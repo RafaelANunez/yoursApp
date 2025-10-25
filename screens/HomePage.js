@@ -1,17 +1,19 @@
 import React, { useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Platform, Pressable } from 'react-native';
 
 const PageContainer = ({ children }) => (
     <View style={styles.pageContainer}>{children}</View>
 );
 
-export const HomePage = ({ onFakeCall }) => {
+export const HomePage = ({ onFakeCall, screenHoldEnabled, screenHoldDuration, onNavigateToJournal }) => {
   const pressTimeout = useRef(null);
 
   const handlePressIn = () => {
-    pressTimeout.current = setTimeout(() => {
-      onFakeCall();
-    }, 10000); // 10 seconds
+    if (screenHoldEnabled) {
+      pressTimeout.current = setTimeout(() => {
+        onFakeCall();
+      }, screenHoldDuration * 1000); // Convert seconds to ms
+    }
   };
 
   const handlePressOut = () => {
@@ -21,17 +23,36 @@ export const HomePage = ({ onFakeCall }) => {
   };
 
   return (
-    <TouchableOpacity
-      style={{ flex: 1 }}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      activeOpacity={1}
+    <ImageBackground
+      source={require('../assets/logo version1.png')}
+      style={styles.backgroundImage}
+      imageStyle={styles.backgroundImageStyle}
     >
-      <PageContainer>
-        <Text style={styles.homeTitle}>Welcome to Yours</Text>
-        <Text style={styles.homeSubtitle}>You are in a safe space.</Text>
-      </PageContainer>
-    </TouchableOpacity>
+      <TouchableOpacity
+        style={{ flex: 1 }}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={1}
+      >
+        <PageContainer>
+          <Text style={styles.homeTitle}>Welcome to Yours</Text>
+          <Text style={styles.homeSubtitle}>You are in a safe space.</Text>
+          <Pressable
+            onPress={onNavigateToJournal}
+            style={({ pressed }) => [
+              styles.journalButton,
+              pressed && styles.journalButtonPressed
+            ]}
+          >
+            {({ pressed }) => (
+              <Text style={[styles.journalButtonText, pressed && styles.journalButtonTextPressed]}>
+                Go to Journal
+              </Text>
+            )}
+          </Pressable>
+        </PageContainer>
+      </TouchableOpacity>
+    </ImageBackground>
   );
 };
 
@@ -42,15 +63,48 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         padding: 20,
         textAlign: 'center',
+        backgroundColor: 'transparent',
       },
       homeTitle: {
-        fontSize: 30,
-        fontWeight: 'bold',
-        color: '#1F2937',
-        marginBottom: 8,
+        fontSize: 47,
+        fontWeight: 'normal',
+        color: '#CD5F66',
+        marginBottom: 5,
+        fontFamily: Platform.OS === 'ios' ? 'SnellRoundhand' : 'cursive',
       },
       homeSubtitle: {
         fontSize: 18,
-        color: '#4B5563',
+        color: '#291314',
+      },
+      backgroundImage: {
+        flex: 1,
+        width: '100%',
+        height: '100%',
+        justifyContent: 'center',
+        alignItems: 'center',
+      },
+      backgroundImageStyle: {
+        resizeMode: 'contain',
+        opacity: 0.3,
+      },
+      journalButton: {
+        marginTop: 20,
+        paddingVertical: 10,
+        paddingHorizontal: 20,
+        borderWidth: 2,
+        borderColor: '#CD5F66',
+        borderRadius: 20,
+        backgroundColor: 'transparent',
+      },
+      journalButtonPressed: {
+        backgroundColor: '#CD5F66',
+      },
+      journalButtonText: {
+        color: '#CD5F66',
+        fontSize: 16,
+        fontWeight: 'bold',
+      },
+      journalButtonTextPressed: {
+        color: 'white',
       },
 });
