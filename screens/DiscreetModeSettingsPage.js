@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput,
 import { PageHeader } from '../components/PageHeader';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const DiscreetModeSettingsPage = ({ onBack }) => {
+const DiscreetModeSettingsPage = ({ navigation }) => {
   const [discreetModeEnabled, setDiscreetModeEnabled] = useState(false);
   const [sudokuScreenEnabled, setSudokuScreenEnabled] = useState(false);
   const [twoFingerTriggerEnabled, setTwoFingerTriggerEnabled] = useState(false);
@@ -126,7 +126,7 @@ const DiscreetModeSettingsPage = ({ onBack }) => {
   if (isLoading) {
     return (
       <View style={styles.fullPage}>
-        <PageHeader title="Discreet Mode" onBack={onBack} />
+        <PageHeader title="Discreet Mode"  onBack={() => navigation.goBack()} />
         <View style={styles.loadingContainer}>
           <Text>Loading settings...</Text>
         </View>
@@ -136,7 +136,7 @@ const DiscreetModeSettingsPage = ({ onBack }) => {
 
   return (
     <View style={styles.fullPage}>
-      <PageHeader title="Discreet Mode" onBack={onBack} />
+      <PageHeader title="Discreet Mode"  onBack={() => navigation.goBack()} />
       <ScrollView style={styles.settingsContainer}>
         {/* General Settings */}
         <View style={styles.settingsSection}>

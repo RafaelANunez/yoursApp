@@ -22,6 +22,7 @@ export const SettingsPage = ({ navigation }) => (
 const styles = StyleSheet.create({
     fullPage: {
         flex: 1,
+        backgroundColor: '#FFF8F8',
     },
     pageContainer: {
         flex: 1,

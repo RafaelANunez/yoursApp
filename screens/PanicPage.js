@@ -5,7 +5,7 @@ import * as SMS from 'expo-sms';
 import { useEmergencyContacts } from '../context/EmergencyContactsContext';
 import { MenuIcon } from '../components/Icons';
 
-export const PanicPage = ({ onBack }) => {
+export const PanicPage = ({ navigation }) => {
   const { contacts } = useEmergencyContacts();
   const pressTimeout = useRef(null);
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -110,7 +110,7 @@ export const PanicPage = ({ onBack }) => {
   return (
     <View style={styles.fullPage}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.headerIcon}>
+       <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
           <MenuIcon color="#C70039" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Emergency</Text>

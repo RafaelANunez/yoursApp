@@ -7,7 +7,8 @@ import { JournalEntryForm } from '../components/JournalEntryForm';
 import { IncidentReportForm } from '../components/IncidentReportForm';
 import { JournalIcon, EditIcon, DeleteIcon } from '../components/Icons';
 
-export const JournalPage = ({ onBack }) => {
+// Use { navigation } from props instead of { onBack }
+export const JournalPage = ({ navigation }) => {
   const { entries, isLoading, addEntry, updateEntry, deleteEntry } = useJournal();
   const [formVisible, setFormVisible] = useState(false);
   const [incidentFormVisible, setIncidentFormVisible] = useState(false);
@@ -130,7 +131,8 @@ export const JournalPage = ({ onBack }) => {
   if (isLoading) {
     return (
       <View style={styles.fullPage}>
-        <PageHeader title="My Journal" onBack={onBack} />
+        {/* Use navigation.goBack() for the onBack prop */}
+        <PageHeader title="My Journal" onBack={() => navigation.goBack()} />
         <View style={styles.loadingContainer}>
           <Text>Loading journal...</Text>
         </View>
@@ -176,7 +178,8 @@ export const JournalPage = ({ onBack }) => {
 
   return (
     <View style={styles.fullPage}>
-      <PageHeader title="My Journal" onBack={onBack} />
+      {/* Use navigation.goBack() for the onBack prop */}
+      <PageHeader title="My Journal" onBack={() => navigation.goBack()} />
 
       <View style={styles.journalContainer}>
         {entries.length === 0 ? (
@@ -231,6 +234,7 @@ export const JournalPage = ({ onBack }) => {
 const styles = StyleSheet.create({
     fullPage: {
         flex: 1,
+        backgroundColor: '#FFF8F8',
     },
     loadingContainer: {
         flex: 1,

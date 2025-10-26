@@ -10,7 +10,7 @@ const PageContainer = ({ children }) => (
     <View style={styles.pageContainer}>{children}</View>
 );
 
-export const ContactsPage = ({ onBack }) => {
+export const ContactsPage = ({ navigation }) => {
   const { contacts, isLoading, addContact, updateContact, deleteContact } = useEmergencyContacts();
   const [formVisible, setFormVisible] = useState(false);
   const [importVisible, setImportVisible] = useState(false);
@@ -56,7 +56,7 @@ export const ContactsPage = ({ onBack }) => {
   if (isLoading) {
     return (
       <View style={styles.fullPage}>
-        <PageHeader title="Emergency Contacts" onBack={onBack} />
+        <PageHeader title="Emergency Contacts" onBack={() => navigation.goBack()} />
         <View style={styles.loadingContainer}>
           <Text>Loading contacts...</Text>
         </View>
@@ -66,7 +66,7 @@ export const ContactsPage = ({ onBack }) => {
 
   return (
     <View style={styles.fullPage}>
-      <PageHeader title="Emergency Contacts" onBack={onBack} />
+      <PageHeader title="Emergency Contacts"  onBack={() => navigation.goBack()} />
 
       <View style={styles.contactsContainer}>
         {contacts.length === 0 ? (
@@ -145,6 +145,7 @@ export const ContactsPage = ({ onBack }) => {
 const styles = StyleSheet.create({
     fullPage: {
         flex: 1,
+        backgroundColor: '#FFF8F8',
       },
       pageContainer: {
         flex: 1,

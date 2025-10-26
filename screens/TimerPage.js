@@ -13,7 +13,7 @@ const PageContainer = ({ children }) => (
 const ITEM_HEIGHT = 44;
 const screenWidth = Dimensions.get('window').width;
 
-export const TimerPage = ({ onBack }) => {
+export const TimerPage = ({ navigation }) => {
   const { contacts } = useEmergencyContacts();
   // selected values for wheels
   const [selectedHour, setSelectedHour] = useState(0);
@@ -144,7 +144,7 @@ export const TimerPage = ({ onBack }) => {
 
   return (
     <View style={styles.fullPage}>
-      <PageHeader title="Safety Timer" onBack={onBack} />
+      <PageHeader title="Safety Timer" onBack={() => navigation.goBack()} />
       <PageContainer>
         <Text style={styles.pageText}>Set a timer for your safety. We'll contact your emergency contacts if needed.</Text>
 
@@ -223,6 +223,7 @@ export const TimerPage = ({ onBack }) => {
 
 const styles = StyleSheet.create({
     fullPage: {
+      backgroundColor: '#fff',
         flex: 1,
     },
     pageContainer: {
