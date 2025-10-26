@@ -5,6 +5,6 @@
   "minify": false,
   "urlRandomness": "cpELstk",
   "https": false,
-  "devClient": true,
-  "scheme": "exp+yours-app"
+  "scheme": null,
+  "devClient": false
 }

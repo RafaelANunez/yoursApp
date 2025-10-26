@@ -1,7 +1,30 @@
+import 'react-native-gesture-handler';
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, SafeAreaView, StatusBar, TouchableOpacity, Text } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  SafeAreaView,
+  StatusBar,
+  TouchableOpacity,
+  Text,
+} from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { VolumeManager } from 'react-native-volume-manager';
+
 import { AppHeader } from './components/AppHeader';
 import { SideMenu } from './components/SideMenu';
+//import { JournalProvider } from './context/JournalContext';
+//import { EmergencyContactsProvider } from './context/EmergencyContactsContext';
+//import { AutofillProvider } from './context/AutofillContext';
+//import { JournalIcon, AlertIcon, TimerIcon, SettingsIcon } from './components/Icons';
+
+// Login/Signup Screens
+import LoginScreen from './screens/LoginScreen';
+import SignupScreen from './screens/SignupScreen';
+
+// Core App Screens
 import { HomePage } from './screens/HomePage';
 import { JournalPage } from './screens/JournalPage';
 import { PanicPage } from './screens/PanicPage';
@@ -15,19 +38,21 @@ import { JournalProvider } from './context/JournalContext';
 import { EmergencyContactsProvider } from './context/EmergencyContactsContext';
 import { AutofillProvider } from './context/AutofillContext';
 import { JournalIcon, AlertIcon, TimerIcon, SettingsIcon } from './components/Icons';
-import { VolumeManager } from 'react-native-volume-manager';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+//import { VolumeManager } from 'react-native-volume-manager';
+//import AsyncStorage from '@react-native-async-storage/async-storage';
 import FakeCallSettingsPage from './screens/FakeCallSettingsPage';
 import BackupAndRestorePage from './screens/BackupAndRestorePage';
+
+// Journey Sharing Screens
 import JourneySharingPageV2 from './components/JourneySharing/JourneySharingPageV2';
 import TrackAFriendPage from './components/JourneySharing/TrackAFriendPage';
 import TrackingDetailPage from './components/JourneySharing/TrackingDetailPage';
 import LocationHistoryPage from './components/LocationHistoryPage';
 
+const Stack = createStackNavigator();
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState('Home');
-  const [navigationParams, setNavigationParams] = useState(null);
+  const [initialRoute, setInitialRoute] = useState(null);
   const [isMenuOpen, setMenuOpen] = useState(false);
   const [isFakeCallActive, setFakeCallActive] = useState(false);
   const [showSudoku, setShowSudoku] = useState(false);
@@ -49,9 +74,9 @@ export default function App() {
 
   // --- Refs to hold the latest state for the volume listener ---
   const settingsRef = useRef({
-      isFakeCallActive,
-      volumeHoldEnabled,
-      volumeHoldDuration,
+    isFakeCallActive,
+    volumeHoldEnabled,
+    volumeHoldDuration,
   });
 
   useEffect(() => {
@@ -62,18 +87,21 @@ export default function App() {
     };
   }, [isFakeCallActive, volumeHoldEnabled, volumeHoldDuration]);
 
-
   // --- Load all settings on initial mount ---
   useEffect(() => {
+    const checkLoginStatus = async () => {
+      const loggedIn = await AsyncStorage.getItem('@logged_in');
+      setInitialRoute(loggedIn ? 'Home' : 'Login');
+    };
+
     const loadAllSettings = async () => {
-        try {
-            await checkDiscreetModeSettings();
-            await loadFakeCallSettings();
-        } catch (error) {
-            console.error("Failed to load settings", error);
-        } finally {
-            setIsCheckingSettings(false);
-        }
+      try {
+        await checkLoginStatus(); // Check login status first
+        await checkDiscreetModeSettings();
+        await loadFakeCallSettings();
+      } catch (error) {
+        console.error('Failed to load settings', error);
+      }
     };
     loadAllSettings();
   }, []);
@@ -81,7 +109,7 @@ export default function App() {
   // --- Volume listener effect ---
   useEffect(() => {
     VolumeManager.enable(true);
-    const volumeListener = VolumeManager.addVolumeListener((result) => {
+    const volumeListener = VolumeManager.addVolumeListener(result => {
       const {
         isFakeCallActive: isFakeCallActiveNow,
         volumeHoldEnabled: isVolumeHoldEnabledNow,
@@ -92,14 +120,9 @@ export default function App() {
 
       const currentVolume = result.volume;
 
-      // *** THIS IS THE FIX ***
-      // Condition to start the timer:
-      // 1. Volume is actively increasing.
-      // OR
-      // 2. Volume is already at max (1.0) and an event is still being fired
-      //    (implying the user is still holding the up button).
-      const isVolumeUpPress = (lastVolume.current !== null && currentVolume > lastVolume.current) ||
-                              (currentVolume === 1.0 && lastVolume.current === 1.0);
+      const isVolumeUpPress =
+        (lastVolume.current !== null && currentVolume > lastVolume.current) ||
+        (currentVolume === 1.0 && lastVolume.current === 1.0);
 
       if (isVolumeUpPress) {
         if (!volumeHoldTimeout.current) {
@@ -110,7 +133,6 @@ export default function App() {
           }, currentVolumeHoldDuration * 1000);
         }
       } else {
-        // Any other event (volume down, or the initial event) clears the timer.
         if (volumeHoldTimeout.current) {
           clearTimeout(volumeHoldTimeout.current);
           volumeHoldTimeout.current = null;
@@ -119,14 +141,13 @@ export default function App() {
       lastVolume.current = currentVolume;
     });
 
-  return () => {
+    return () => {
       volumeListener.remove();
       if (volumeHoldTimeout.current) {
         clearTimeout(volumeHoldTimeout.current);
       }
     };
   }, []); // Empty dependency array is correct here.
-
 
   const loadFakeCallSettings = async () => {
     try {
@@ -146,7 +167,6 @@ export default function App() {
       console.error('Error loading fake call settings:', error);
     }
   };
-
 
   const checkDiscreetModeSettings = async () => {
     try {
@@ -169,7 +189,7 @@ export default function App() {
     setIsEmergencyMode(false);
   };
 
-  const onTouchStart = (e) => {
+  const onTouchStart = e => {
     if (!twoFingerTriggerEnabled || showSudoku) return;
     touchCount.current = e.nativeEvent.touches.length;
     if (touchCount.current === 2) {
@@ -188,7 +208,7 @@ export default function App() {
     }
   };
 
-  const onTouchMove = (e) => {
+  const onTouchMove = e => {
     if (!twoFingerTriggerEnabled || !twoFingerTimer.current) return;
     const currentTouches = e.nativeEvent.touches;
     if (currentTouches.length !== 2) {
@@ -211,7 +231,7 @@ export default function App() {
     }
   };
 
-  const onTouchEnd = (e) => {
+  const onTouchEnd = e => {
     if (!twoFingerTriggerEnabled) return;
     if (twoFingerTimer.current) {
       clearTimeout(twoFingerTimer.current);
@@ -224,119 +244,106 @@ export default function App() {
     setShowSudoku(true);
   };
 
-  const renderPage = () => {
-    const goHome = () => setCurrentPage('Home');
-    const handleNavigate = (page, params = null) => {
-      setCurrentPage(page);
-      setNavigationParams(params);
-    };
-    if (isFakeCallActive) {
-      return <FakeCallScreen onEndCall={() => setFakeCallActive(false)} callerName={callerName} />;
-    }
-    if (showSudoku) {
-      return <SudokuScreen onBypassSuccess={handleBypassSuccess} isEmergencyMode={isEmergencyMode} />;
-    }
-    switch (currentPage) {
-      case 'Journal': return <JournalPage onBack={goHome} />;
-      case 'Panic': return <PanicPage onBack={goHome} />;
-      case 'Timer': return <TimerPage onBack={goHome} />;
-      case 'Settings': return <SettingsPage onBack={goHome} setCurrentPage={setCurrentPage} />;
-      case 'Contacts': return <ContactsPage onBack={goHome} />;
-      case 'DiscreetMode': return <DiscreetModeSettingsPage onBack={goHome} />;
-      case 'BackupAndRestore': return <BackupAndRestorePage onBack={() => setCurrentPage('Settings')} />;
-      case 'JourneySharing': return <JourneySharingPageV2 onBack={goHome} onNavigate={handleNavigate} />;
-      case 'TrackAFriend': return <TrackAFriendPage onBack={() => setCurrentPage('JourneySharing')} onNavigate={handleNavigate} />;
-      case 'TrackingDetail': return <TrackingDetailPage onBack={() => setCurrentPage('JourneySharing')} sessionId={navigationParams} />;
-      case 'LocationHistory': return <LocationHistoryPage onBack={goHome} />;
-      case 'FakeCallSettings':
-          return (
-            <FakeCallSettingsPage
-              onBack={() => setCurrentPage('Settings')}
-              // Pass current settings down to the page
-              settings={{
-                callerName,
-                screenHoldEnabled,
-                volumeHoldEnabled,
-                screenHoldDuration,
-                volumeHoldDuration,
-              }}
-              // Provide a callback to update the state in App.js
-              onSave={(newSettings) => {
-                setCallerName(newSettings.callerName);
-                setScreenHoldEnabled(newSettings.screenHoldEnabled);
-                setVolumeHoldEnabled(newSettings.volumeHoldEnabled);
-                setScreenHoldDuration(newSettings.screenHoldDuration);
-                setVolumeHoldDuration(newSettings.volumeHoldDuration);
-              }}
-            />
-          );
-      default: return (
-        <HomePage
-            onFakeCall={() => setFakeCallActive(true)}
-            screenHoldEnabled={screenHoldEnabled}
-            screenHoldDuration={screenHoldDuration}
-            onNavigateToJournal={() => setCurrentPage('Journal')}
-        />
-      );
-    }
-  };
-
-  const handleMenuNavigation = (page) => {
-    setMenuOpen(false);
-    setCurrentPage(page);
-  };
-
-  if (isCheckingSettings) {
-    return (
-      <View style={[styles.container, styles.loadingContainer]}>
-        <Text>Loading...</Text>
-      </View>
-    );
+  if (!initialRoute) {
+    return null; // Wait until we know where to navigate
   }
 
   return (
     <AutofillProvider>
-        <EmergencyContactsProvider>
-          <JournalProvider>
+      <EmergencyContactsProvider>
+        <JournalProvider>
+          <NavigationContainer>
             <View
-              style={styles.container}
+              style={styles.touchContainer}
               onTouchStart={onTouchStart}
               onTouchMove={onTouchMove}
               onTouchEnd={onTouchEnd}
             >
-              <SafeAreaView style={styles.container}>
-                <StatusBar barStyle="dark-content" backgroundColor="#FEF2F2" />
-                {currentPage === 'Home' && !isFakeCallActive && !showSudoku && (
-                  <AppHeader onMenuPress={() => setMenuOpen(true)} title="Yours" />
-                )}
-                <View style={styles.contentArea}>
-                  {renderPage()}
-                </View>
-                {currentPage === 'Home' && !isFakeCallActive && !showSudoku && (
-                  <View style={styles.bottomNav}>
-                    <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Journal')}>
-                      <JournalIcon />
-                      <Text style={styles.navButtonText}>Journal</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Panic')}>
-                      <AlertIcon />
-                      <Text style={styles.navButtonText}>Panic</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Timer')}>
-                      <TimerIcon />
-                      <Text style={styles.navButtonText}>Timer</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.navButton} onPress={() => setCurrentPage('Settings')}>
-                      <SettingsIcon />
-                      <Text style={styles.navButtonText}>Settings</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-                <SideMenu isOpen={isMenuOpen} onClose={() => setMenuOpen(false)} onNavigate={handleMenuNavigation}/>
-              </SafeAreaView>
+              <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="Login" component={LoginScreen} />
+                <Stack.Screen name="Signup" component={SignupScreen} />
+                <Stack.Screen name="Home">
+                  {props => (
+                    <SafeAreaView style={styles.container}>
+                      <StatusBar barStyle="dark-content" backgroundColor="#FEF2F2" />
+                      {!isFakeCallActive && !showSudoku && (
+                        <AppHeader onMenuPress={() => setMenuOpen(true)} title="Yours" />
+                      )}
+                      <View style={styles.contentArea}>
+                        {isFakeCallActive ? (
+                          <FakeCallScreen
+                            onEndCall={() => setFakeCallActive(false)}
+                            callerName={callerName}
+                          />
+                        ) : showSudoku ? (
+                          <SudokuScreen
+                            onBypassSuccess={handleBypassSuccess}
+                            isEmergencyMode={isEmergencyMode}
+                          />
+                        ) : (
+                          <HomePage
+                            {...props}
+                            onFakeCall={() => setFakeCallActive(true)}
+                            screenHoldEnabled={screenHoldEnabled}
+                            screenHoldDuration={screenHoldDuration}
+                            onNavigateToJournal={() => props.navigation.navigate('Journal')}
+                          />
+                        )}
+                      </View>
+
+                      {!isFakeCallActive && !showSudoku && (
+                        <View style={styles.bottomNav}>
+                          <TouchableOpacity onPress={() => props.navigation.navigate('Journal')} style={styles.navButton}>
+                            <JournalIcon />
+                            <Text style={styles.navButtonText}>Journal</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => props.navigation.navigate('Panic')} style={styles.navButton}>
+                            <AlertIcon />
+                            <Text style={styles.navButtonText}>Panic</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => props.navigation.navigate('Timer')} style={styles.navButton}>
+                            <TimerIcon />
+                            <Text style={styles.navButtonText}>Timer</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => props.navigation.navigate('Settings')} style={styles.navButton}>
+                            <SettingsIcon />
+                            <Text style={styles.navButtonText}>Settings</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+
+                      <SideMenu
+                        isOpen={isMenuOpen}
+                        onClose={() => setMenuOpen(false)}
+                        onNavigate={page => {
+                          setMenuOpen(false);
+                          props.navigation.navigate(page);
+                        }}
+                      />
+                    </SafeAreaView>
+                  )}
+                </Stack.Screen>
+
+                {/* Core Screens */}
+                <Stack.Screen name="Journal" component={JournalPage} />
+                <Stack.Screen name="Panic" component={PanicPage} />
+                <Stack.Screen name="Timer" component={TimerPage} />
+                <Stack.Screen name="Settings" component={SettingsPage} />
+                <Stack.Screen name="Contacts" component={ContactsPage} />
+                <Stack.Screen name="FakeCallSettings" component={FakeCallSettingsPage} />
+                <Stack.Screen name="BackupAndRestore" component={BackupAndRestorePage} />
+                <Stack.Screen name="DiscreetMode" component={DiscreetModeSettingsPage} />
+
+                {/* Journey Sharing Screens */}
+                <Stack.Screen name="JourneySharing" component={JourneySharingPageV2} />
+                <Stack.Screen name="TrackAFriend" component={TrackAFriendPage} />
+                <Stack.Screen name="TrackingDetail" component={TrackingDetailPage} />
+                <Stack.Screen name="LocationHistory" component={LocationHistoryPage} />
+              </Stack.Navigator>
             </View>
-          </JournalProvider>
-        </EmergencyContactsProvider>
+          </NavigationContainer>
+        </JournalProvider>
+      </EmergencyContactsProvider>
     </AutofillProvider>
   );
 }
@@ -346,7 +353,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFF8F8',
   },
-  loadingContainer: {
+  touchContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
