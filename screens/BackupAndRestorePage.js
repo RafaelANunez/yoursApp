@@ -6,7 +6,8 @@ import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PageHeader } from '../components/PageHeader';
 
-const BackupAndRestorePage = ({ onBack }) => {
+// Use { navigation } from props
+const BackupAndRestorePage = ({ navigation }) => {
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
 
@@ -75,7 +76,8 @@ const BackupAndRestorePage = ({ onBack }) => {
 
   return (
     <View style={styles.fullPage}>
-      <PageHeader title="Backup & Restore" onBack={onBack} />
+      {/* Use navigation.goBack() instead of onBack */}
+      <PageHeader title="Backup & Restore" onBack={() => navigation.goBack()} />
       <View style={styles.container}>
         <Text style={styles.description}>
           Create a backup of all your app data, including journal entries, contacts, and settings. You can save this file to your device, Google Drive, or send it via email.

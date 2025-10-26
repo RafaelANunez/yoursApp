@@ -15,10 +15,10 @@ import { VolumeManager } from 'react-native-volume-manager';
 
 import { AppHeader } from './components/AppHeader';
 import { SideMenu } from './components/SideMenu';
-//import { JournalProvider } from './context/JournalContext';
-//import { EmergencyContactsProvider } from './context/EmergencyContactsContext';
-//import { AutofillProvider } from './context/AutofillContext';
-//import { JournalIcon, AlertIcon, TimerIcon, SettingsIcon } from './components/Icons';
+import { JournalProvider } from './context/JournalContext';
+import { EmergencyContactsProvider } from './context/EmergencyContactsContext';
+import { AutofillProvider } from './context/AutofillContext';
+import { JournalIcon, AlertIcon, TimerIcon, SettingsIcon } from './components/Icons';
 
 // Login/Signup Screens
 import LoginScreen from './screens/LoginScreen';
@@ -34,12 +34,6 @@ import { ContactsPage } from './screens/ContactsPage';
 import { FakeCallScreen } from './screens/FakeCallScreen';
 import DiscreetModeSettingsPage from './screens/DiscreetModeSettingsPage';
 import SudokuScreen from './screens/SudokuScreen';
-import { JournalProvider } from './context/JournalContext';
-import { EmergencyContactsProvider } from './context/EmergencyContactsContext';
-import { AutofillProvider } from './context/AutofillContext';
-import { JournalIcon, AlertIcon, TimerIcon, SettingsIcon } from './components/Icons';
-//import { VolumeManager } from 'react-native-volume-manager';
-//import AsyncStorage from '@react-native-async-storage/async-storage';
 import FakeCallSettingsPage from './screens/FakeCallSettingsPage';
 import BackupAndRestorePage from './screens/BackupAndRestorePage';
 
@@ -56,7 +50,6 @@ export default function App() {
   const [isMenuOpen, setMenuOpen] = useState(false);
   const [isFakeCallActive, setFakeCallActive] = useState(false);
   const [showSudoku, setShowSudoku] = useState(false);
-  const [isCheckingSettings, setIsCheckingSettings] = useState(true);
   const [twoFingerTriggerEnabled, setTwoFingerTriggerEnabled] = useState(false);
   const [isEmergencyMode, setIsEmergencyMode] = useState(false);
   const twoFingerTimer = useRef(null);
@@ -89,21 +82,30 @@ export default function App() {
 
   // --- Load all settings on initial mount ---
   useEffect(() => {
-    const checkLoginStatus = async () => {
-      const loggedIn = await AsyncStorage.getItem('@logged_in');
-      setInitialRoute(loggedIn ? 'Home' : 'Login');
-    };
-
-    const loadAllSettings = async () => {
+    const loadApp = async () => {
+      let route = 'Login'; // Default route
       try {
-        await checkLoginStatus(); // Check login status first
-        await checkDiscreetModeSettings();
-        await loadFakeCallSettings();
+        // Check login status
+        const loggedIn = await AsyncStorage.getItem('@logged_in');
+        route = loggedIn ? 'Home' : 'Login';
+
+        // Load other settings in parallel
+        await Promise.all([
+          checkDiscreetModeSettings(),
+          loadFakeCallSettings()
+        ]);
+
       } catch (error) {
-        console.error('Failed to load settings', error);
+        console.error('Failed to load settings:', error);
+        // If any error occurs, we'll still default to the Login route
+        route = 'Login';
+      } finally {
+        // Set the initial route *after* everything
+        setInitialRoute(route);
       }
     };
-    loadAllSettings();
+
+    loadApp();
   }, []);
 
   // --- Volume listener effect ---
@@ -245,7 +247,13 @@ export default function App() {
   };
 
   if (!initialRoute) {
-    return null; // Wait until we know where to navigate
+    // Show a loading view instead of null to avoid a white flash
+    // and to make it clear the app is working.
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <Text>Loading...</Text>
+      </View>
+    );
   }
 
   return (
@@ -330,7 +338,29 @@ export default function App() {
                 <Stack.Screen name="Timer" component={TimerPage} />
                 <Stack.Screen name="Settings" component={SettingsPage} />
                 <Stack.Screen name="Contacts" component={ContactsPage} />
-                <Stack.Screen name="FakeCallSettings" component={FakeCallSettingsPage} />
+                <Stack.Screen name="FakeCallSettings">
+                  {props => (
+                    <FakeCallSettingsPage
+                      {...props} // This passes 'navigation'
+                      // Pass current settings down to the page
+                      settings={{
+                        callerName,
+                        screenHoldEnabled,
+                        volumeHoldEnabled,
+                        screenHoldDuration,
+                        volumeHoldDuration,
+                      }}
+                      // Provide a callback to update the state in App.js
+                      onSave={newSettings => {
+                        setCallerName(newSettings.callerName);
+                        setScreenHoldEnabled(newSettings.screenHoldEnabled);
+                        setVolumeHoldEnabled(newSettings.volumeHoldEnabled);
+                        setScreenHoldDuration(newSettings.screenHoldDuration);
+                        setVolumeHoldDuration(newSettings.volumeHoldDuration);
+                      }}
+                    />
+                  )}
+                </Stack.Screen>
                 <Stack.Screen name="BackupAndRestore" component={BackupAndRestorePage} />
                 <Stack.Screen name="DiscreetMode" component={DiscreetModeSettingsPage} />
 
@@ -353,10 +383,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFF8F8',
   },
-  touchContainer: {
-    flex: 1,
+  // This style was missing from the previous merge
+  loadingContainer: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  touchContainer: {
+    flex: 1,
   },
   contentArea: {
     flex: 1,

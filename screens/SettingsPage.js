@@ -2,14 +2,17 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { PageHeader } from '../components/PageHeader';
 
-export const SettingsPage = ({ onBack, setCurrentPage }) => (
+// Use { navigation } from props
+export const SettingsPage = ({ navigation }) => (
   <View style={styles.fullPage}>
-    <PageHeader title="Settings" onBack={onBack} />
+    {/* Use navigation.goBack() instead of onBack */}
+    <PageHeader title="Settings" onBack={() => navigation.goBack()} />
     <View style={styles.pageContainer}>
-      <TouchableOpacity onPress={() => setCurrentPage('FakeCallSettings')}>
+      {/* Use navigation.navigate() instead of setCurrentPage() */}
+      <TouchableOpacity onPress={() => navigation.navigate('FakeCallSettings')}>
         <Text style={styles.linkText}>Fake Call Settings</Text>
       </TouchableOpacity>
-      <TouchableOpacity style={{marginTop: 20}} onPress={() => setCurrentPage('BackupAndRestore')}>
+      <TouchableOpacity style={{marginTop: 20}} onPress={() => navigation.navigate('BackupAndRestore')}>
         <Text style={styles.linkText}>Backup & Restore</Text>
       </TouchableOpacity>
     </View>

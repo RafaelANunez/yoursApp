@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert 
 import { PageHeader } from '../components/PageHeader';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const FakeCallSettingsPage = ({ onBack, settings, onSave }) => {
+// Use { navigation, settings, onSave } from props
+const FakeCallSettingsPage = ({ navigation, settings, onSave }) => {
   // Initialize local state from the props passed down from App.js
   const [callerName, setCallerName] = useState(settings.callerName);
   const [screenHoldEnabled, setScreenHoldEnabled] = useState(settings.screenHoldEnabled);
@@ -39,7 +40,8 @@ const FakeCallSettingsPage = ({ onBack, settings, onSave }) => {
 
   return (
     <View style={styles.fullPage}>
-      <PageHeader title="Fake Call Settings" onBack={onBack} />
+      {/* Use navigation.goBack() instead of onBack */}
+      <PageHeader title="Fake Call Settings" onBack={() => navigation.goBack()} />
       <ScrollView style={styles.settingsContainer}>
         {/* Caller Information */}
         <View style={styles.settingsSection}>
