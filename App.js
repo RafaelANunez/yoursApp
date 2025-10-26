@@ -15,16 +15,7 @@ import { JournalProvider } from './context/JournalContext';
 import { EmergencyContactsProvider } from './context/EmergencyContactsContext';
 import { AutofillProvider } from './context/AutofillContext';
 import { JournalIcon, AlertIcon, TimerIcon, SettingsIcon } from './components/Icons';
-// Conditional import for VolumeManager - only works in development builds with the native module linked.
-// Use require in a try/catch so the app won't crash in Expo or when the native module isn't available.
-let VolumeManager = null;
-try {
-  const volumeModule = require('react-native-volume-manager');
-  // module may export as { VolumeManager } or default or the module itself
-  VolumeManager = volumeModule.VolumeManager || volumeModule.default || volumeModule;
-} catch (error) {
-  console.log('VolumeManager not available (Expo Go or not linked) - volume button features disabled');
-}
+import { VolumeManager } from 'react-native-volume-manager';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import FakeCallSettingsPage from './screens/FakeCallSettingsPage';
 import BackupAndRestorePage from './screens/BackupAndRestorePage';
@@ -89,15 +80,7 @@ export default function App() {
 
   // --- Volume listener effect ---
   useEffect(() => {
-    if (!VolumeManager || !VolumeManager.addVolumeListener) {
-      console.log('VolumeManager not available - skipping volume listener setup');
-      return;
-    }
-    try {
-      if (typeof VolumeManager.enable === 'function') VolumeManager.enable(true);
-    } catch (err) {
-      console.log('VolumeManager.enable() failed:', err);
-    }
+    VolumeManager.enable(true);
     const volumeListener = VolumeManager.addVolumeListener((result) => {
       const {
         isFakeCallActive: isFakeCallActiveNow,
@@ -136,10 +119,8 @@ export default function App() {
       lastVolume.current = currentVolume;
     });
 
-    return () => {
-      if (volumeListener && typeof volumeListener.remove === 'function') {
-        volumeListener.remove();
-      }
+  return () => {
+      volumeListener.remove();
       if (volumeHoldTimeout.current) {
         clearTimeout(volumeHoldTimeout.current);
       }

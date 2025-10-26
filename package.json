@@ -13,7 +13,7 @@
     "crypto-js": "^4.2.0",
     "expo": "~54.0.2",
     "expo-av": "~16.0.7",
-    "expo-constants": "~18.0.9",
+    "expo-constants": "~18.0.10",
     "expo-contacts": "^15.0.9",
     "expo-crypto": "~15.0.7",
     "expo-dev-client": "~6.0.15",
@@ -31,6 +31,7 @@
     "react-native-maps": "1.20.1",
     "react-native-share": "^12.2.0",
     "react-native-svg": "^15.12.1",
+    "react-native-volume-manager": "^2.0.8",
     "react-native-web": "^0.21.0"
   },
   "private": true
