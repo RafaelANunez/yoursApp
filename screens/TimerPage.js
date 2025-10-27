@@ -144,7 +144,7 @@ export const TimerPage = ({ onBack }) => {
 
   return (
     <View style={styles.fullPage}>
-      <PageHeader title="Safety Timer" onBack={onBack} />
+      {/* <PageHeader title="Safety Timer" onBack={onBack} /> */}
       <PageContainer>
         <Text style={styles.pageText}>Set a timer for your safety. We'll contact your emergency contacts if needed.</Text>
 

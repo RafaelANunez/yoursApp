@@ -17,7 +17,7 @@ export const SettingsPage = ({ navigation, onBack, setCurrentPage }) => {
 
   return (
     <View style={styles.fullPage}>
-      <PageHeader title="Settings" onBack={onBack} />
+      {/* <PageHeader title="Settings" onBack={onBack} /> */}
       <View style={styles.pageContainer}>
         <TouchableOpacity onPress={() => setCurrentPage('FakeCallSettings')}>
           <Text style={styles.linkText}>Fake Call Settings</Text>

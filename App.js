@@ -216,7 +216,7 @@ export default function App() {
                   headerStyle: {
                     backgroundColor: '#FEF2F2',  // Match app theme
                   },
-                  headerTintColor: '#000000ff',  // Match text theme
+                  headerTintColor: '#CD5F66',  // Match text theme
                 }}>
                 {/* Auth Flow Screens - No headers needed */}
                 <Stack.Screen name="Login" options={{ headerShown: false }} component={LoginScreen} />

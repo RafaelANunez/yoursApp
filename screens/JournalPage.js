@@ -176,7 +176,7 @@ export const JournalPage = ({ onBack }) => {
 
   return (
     <View style={styles.fullPage}>
-      <PageHeader title="My Journal" onBack={onBack} />
+      {/* <PageHeader title="My Journal" onBack={onBack} /> */}
 
       <View style={styles.journalContainer}>
         {entries.length === 0 ? (
