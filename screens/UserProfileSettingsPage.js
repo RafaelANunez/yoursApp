@@ -1,37 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  TouchableOpacity, 
+  StyleSheet, 
+  Alert, 
+  Image,
+  ScrollView 
+} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { PageHeader } from '../components/PageHeader'; // Assuming PageHeader is reusable
-import { UserIcon, MailIcon, LockIcon } from '../components/Icons'; // Assuming icons exist
+import { PageHeader } from '../components/PageHeader';
+import { UserIcon, MailIcon, LockIcon } from '../components/Icons';
+import { useAuth } from '../context/AuthContext'; 
 
 const UserProfileSettingsPage = ({ navigation }) => {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState(''); // Assuming email is stored and needed
+  const { user, updateUser } = useAuth();
+
+  const [name, setName] = useState(user?.name || '');
+  const [email, setEmail] = useState(user?.email || ''); 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [imageUri, setImageUri] = useState(null);
-  const [currentCredentials, setCurrentCredentials] = useState(null);
-
-  useEffect(() => {
-    loadUserData();
-  }, []);
-
-  const loadUserData = async () => {
-    try {
-      const stored = await AsyncStorage.getItem('@user_credentials');
-      if (stored) {
-        const creds = JSON.parse(stored);
-        setCurrentCredentials(creds);
-        setName(creds.name || '');
-        setEmail(creds.email || ''); // Load email if stored
-        setImageUri(creds.profilePic || null);
-      }
-    } catch (error) {
-      console.error('Error loading user data:', error);
-      Alert.alert('Error', 'Could not load user profile.');
-    }
-  };
+  const [imageUri, setImageUri] = useState(user?.profilePic || null);
 
   const pickImage = async () => {
     // Permission check
@@ -47,20 +37,28 @@ const UserProfileSettingsPage = ({ navigation }) => {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.5,
+      // --- START OF FIX ---
+      // 1. Request the image as a Base64 string instead of a file URI
+      base64: true,
+      // --- END OF FIX ---
     });
 
     if (!result.canceled) {
-      setImageUri(result.assets[0].uri);
+      // --- START OF FIX ---
+      // 2. Create a "data URI" from the Base64 string
+      // This is a self-contained string that Image components can render
+      setImageUri(`data:image/jpeg;base64,${result.assets[0].base64}`);
+      // --- END OF FIX ---
     }
   };
 
   const handleSaveChanges = async () => {
-    if (!currentCredentials) {
+    if (!user) {
       Alert.alert('Error', 'Could not load current user data.');
       return;
     }
-
-    let updatedPassword = currentCredentials.password; // Keep old password by default
+    
+    let updatedPassword = user.password; 
 
     // Password change validation
     if (newPassword || confirmPassword) {
@@ -72,28 +70,20 @@ const UserProfileSettingsPage = ({ navigation }) => {
         Alert.alert('Validation Error', 'New passwords do not match.');
         return;
       }
-      updatedPassword = newPassword; // Set the new password
+      updatedPassword = newPassword; 
     }
 
-    // Prepare updated credentials
     const updatedCredentials = {
-      ...currentCredentials,
       name: name.trim(),
-      // email: email.trim(), // Decide if email should be changeable
       password: updatedPassword,
-      profilePic: imageUri,
+      profilePic: imageUri, // This is now the base64 data URI
     };
 
     try {
-      // Save updated credentials
-      await AsyncStorage.setItem('@user_credentials', JSON.stringify(updatedCredentials));
-
-      // Clear password fields after saving
+      await updateUser(updatedCredentials);
       setNewPassword('');
       setConfirmPassword('');
-
-      Alert.alert('Success', 'Profile updated successfully!');
-      navigation.goBack(); // Go back after saving
+      navigation.goBack(); 
     } catch (error) {
       console.error('Error saving user data:', error);
       Alert.alert('Error', 'Could not update profile.');
@@ -107,9 +97,9 @@ const UserProfileSettingsPage = ({ navigation }) => {
         {/* Profile Picture */}
         <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
           {imageUri ? (
+            // The Image component can render base64 data URIs perfectly
             <Image source={{ uri: imageUri }} style={styles.profileImage} />
           ) : (
-            // Basic placeholder or icon
             <View style={styles.profileImagePlaceholder}>
                <UserIcon size={40} color="#9CA3AF" />
             </View>
@@ -129,16 +119,15 @@ const UserProfileSettingsPage = ({ navigation }) => {
           />
         </View>
 
-        {/* Email (Display Only or Editable) */}
+        {/* Email (Display Only) */}
         <View style={styles.inputGroup}>
           <MailIcon style={styles.inputIcon} color="#9CA3AF" />
           <TextInput
-            style={[styles.input, styles.readOnlyInput]} // Make read-only visually/functionally if needed
+            style={[styles.input, styles.readOnlyInput]} 
             value={email}
-            // onChangeText={setEmail} // Uncomment if email should be editable
             placeholder="Email"
             placeholderTextColor="#9CA3AF"
-            editable={false} // Set to false if email is not changeable
+            editable={false}
             keyboardType="email-address"
             autoCapitalize="none"
           />
@@ -179,11 +168,11 @@ const UserProfileSettingsPage = ({ navigation }) => {
   );
 };
 
-// Add relevant styles, adapting from Login/Signup screens
+// styles remain the same
 const styles = StyleSheet.create({
     fullPage: {
         flex: 1,
-        backgroundColor: '#FFF8F8', // Match theme
+        backgroundColor: '#FFF8F8', 
     },
     container: {
         flex: 1,
@@ -203,13 +192,13 @@ const styles = StyleSheet.create({
         width: 120,
         height: 120,
         borderRadius: 60,
-        backgroundColor: '#E5E7EB', // Placeholder background
+        backgroundColor: '#E5E7EB', 
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 10,
     },
     imagePickerText: {
-        color: '#F87171', // Main pink color
+        color: '#F87171', 
         fontSize: 16,
     },
     inputGroup: {
@@ -218,7 +207,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderRadius: 10,
         borderWidth: 1,
-        borderColor: '#FBCFE8', // Light pink border
+        borderColor: '#FBCFE8', 
         height: 55,
         marginBottom: 15,
         paddingHorizontal: 15,
@@ -233,7 +222,7 @@ const styles = StyleSheet.create({
         color: '#333',
     },
      readOnlyInput: {
-        color: '#6B7280', // Dim color for read-only fields
+        color: '#6B7280', 
     },
     sectionTitle: {
         fontSize: 18,
@@ -243,7 +232,7 @@ const styles = StyleSheet.create({
         marginBottom: 10,
     },
     saveButton: {
-        backgroundColor: '#F87171', // Main pink button
+        backgroundColor: '#F87171', 
         borderRadius: 10,
         height: 50,
         justifyContent: 'center',

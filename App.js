@@ -18,7 +18,8 @@ import { AppHeader } from './components/AppHeader';
 import { SideMenu } from './components/SideMenu';
 
 // --- CONTEXT PROVIDERS ---
-import { AuthProvider, useAuth } from './context/AuthContext'; // IMPORTED
+// Make sure AuthProvider is at the top
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { JournalProvider } from './context/JournalContext';
 import { EmergencyContactsProvider } from './context/EmergencyContactsContext';
 import { AutofillProvider } from './context/AutofillContext';
@@ -56,16 +57,16 @@ const Stack = createStackNavigator();
 // The AuthProvider wraps everything that needs to know about login state.
 export default function App() {
   return (
-    <AutofillProvider>
-      <EmergencyContactsProvider>
-        <JournalProvider>
-          {/* --- WRAPPED WITH AUTH PROVIDER --- */}
-          <AuthProvider>
+    // --- AuthProvider MUST wrap all other providers ---
+    <AuthProvider>
+      <AutofillProvider>
+        <EmergencyContactsProvider>
+          <JournalProvider>
             <AppContent />
-          </AuthProvider>
-        </JournalProvider>
-      </EmergencyContactsProvider>
-    </AutofillProvider>
+          </JournalProvider>
+        </EmergencyContactsProvider>
+      </AutofillProvider>
+    </AuthProvider>
   );
 }
 
@@ -73,12 +74,9 @@ export default function App() {
 // This contains all the state, effects, and navigation logic from the original App.js
 function AppContent() {
   // --- GET AUTH STATE ---
-  // isLoading: true while AuthContext checks storage for a logged-in user
-  // isLoggedIn: true if user is logged in
-  // user: object containing user data (e.g., user.email)
   const { user, isLoggedIn, isLoading } = useAuth();
 
-  // --- Removed initialRoute state, as it's now derived from AuthContext ---
+  // --- App State ---
   const [isMenuOpen, setMenuOpen] = useState(false);
   const [isFakeCallActive, setFakeCallActive] = useState(false);
   const [showSudoku, setShowSudoku] = useState(false);
@@ -125,7 +123,7 @@ function AppContent() {
       setVolumeHoldEnabled(true);
       setScreenHoldDuration(10);
       setVolumeHoldDuration(5);
-      setShowSudoku(false);
+      setShowSudoku(false); // Ensure Sudoku is off on logout
       setTwoFingerTriggerEnabled(false);
       setIsEmergencyMode(false);
     }
@@ -136,6 +134,35 @@ function AppContent() {
     VolumeManager.enable(true);
     const volumeListener = VolumeManager.addVolumeListener(result => {
       // ... (volume listener logic remains the same)
+      const {
+        isFakeCallActive: isFakeCallActiveNow,
+        volumeHoldEnabled: isVolumeHoldEnabledNow,
+        volumeHoldDuration: currentVolumeHoldDuration,
+      } = settingsRef.current;
+
+      if (!isVolumeHoldEnabledNow || isFakeCallActiveNow) return;
+
+      const currentVolume = result.volume;
+
+      const isVolumeUpPress =
+        (lastVolume.current !== null && currentVolume > lastVolume.current) ||
+        (currentVolume === 1.0 && lastVolume.current === 1.0);
+
+      if (isVolumeUpPress) {
+        if (!volumeHoldTimeout.current) {
+          volumeHoldTimeout.current = setTimeout(() => {
+            setFakeCallActive(() => true);
+            clearTimeout(volumeHoldTimeout.current);
+            volumeHoldTimeout.current = null;
+          }, currentVolumeHoldDuration * 1000);
+        }
+      } else {
+        if (volumeHoldTimeout.current) {
+          clearTimeout(volumeHoldTimeout.current);
+          volumeHoldTimeout.current = null;
+        }
+      }
+      lastVolume.current = currentVolume;
     });
 
     return () => {
@@ -170,6 +197,7 @@ function AppContent() {
   };
 
   // --- MODIFIED: Load functions now take user's email ---
+  // THIS FUNCTION CONTAINS THE LATEST FIX
   const checkDiscreetModeSettings = async (email) => {
     try {
       // Keys are now prefixed with the user's email
@@ -183,12 +211,22 @@ function AppContent() {
         AsyncStorage.getItem(keys[1]),
         AsyncStorage.getItem(keys[2]),
       ]);
+
+      // --- START OF FIX ---
+      // If both settings are enabled, show Sudoku
       if (discreetMode === 'true' && sudokuScreen === 'true') {
         setShowSudoku(true);
+      } else {
+        // ELSE, explicitly set it to false. This is what was missing.
+        setShowSudoku(false); 
       }
+      // --- END OF FIX ---
+
       setTwoFingerTriggerEnabled(twoFinger === 'true');
     } catch (error) {
       console.error('Error checking discreet mode settings:', error);
+      // Failsafe: if settings fail to load, default to not showing Sudoku
+      setShowSudoku(false);
     }
   };
   
@@ -220,10 +258,61 @@ function AppContent() {
     setShowSudoku(false);
     setIsEmergencyMode(false);
   };
-  const onTouchStart = e => { /* ... */ };
-  const onTouchMove = e => { /* ... */ };
-  const onTouchEnd = e => { /* ... */ };
-  const triggerEmergencySudoku = () => { /* ... */ };
+
+  const onTouchStart = e => {
+    if (!twoFingerTriggerEnabled || showSudoku) return;
+    touchCount.current = e.nativeEvent.touches.length;
+    if (touchCount.current === 2) {
+      initialTouchPositions.current = e.nativeEvent.touches.map(touch => ({
+        x: touch.pageX,
+        y: touch.pageY,
+      }));
+      twoFingerTimer.current = setTimeout(() => {
+        triggerEmergencySudoku();
+      }, 1000);
+    } else {
+      if (twoFingerTimer.current) {
+        clearTimeout(twoFingerTimer.current);
+        twoFingerTimer.current = null;
+      }
+    }
+  };
+
+  const onTouchMove = e => {
+    if (!twoFingerTriggerEnabled || !twoFingerTimer.current) return;
+    const currentTouches = e.nativeEvent.touches;
+    if (currentTouches.length !== 2) {
+      clearTimeout(twoFingerTimer.current);
+      twoFingerTimer.current = null;
+      return;
+    }
+    let maxMovement = 0;
+    for (let i = 0; i < 2; i++) {
+      if (initialTouchPositions.current[i]) {
+        const dx = currentTouches[i].pageX - initialTouchPositions.current[i].x;
+        const dy = currentTouches[i].pageY - initialTouchPositions.current[i].y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        maxMovement = Math.max(maxMovement, distance);
+      }
+    }
+    if (maxMovement > 30) {
+      clearTimeout(twoFingerTimer.current);
+      twoFingerTimer.current = null;
+    }
+  };
+
+  const onTouchEnd = e => {
+    if (!twoFingerTriggerEnabled) return;
+    if (twoFingerTimer.current) {
+      clearTimeout(twoFingerTimer.current);
+      twoFingerTimer.current = null;
+    }
+  };
+
+  const triggerEmergencySudoku = () => {
+    setIsEmergencyMode(true);
+    setShowSudoku(true);
+  };
 
   // --- MODIFIED: Show loading screen while AuthContext is busy ---
   if (isLoading) {
@@ -279,10 +368,26 @@ function AppContent() {
                         />
                       )}
                     </View>
-
+                    
+                    {/* --- THIS IS THE MENU THAT WAS HIDDEN --- */}
                     {!isFakeCallActive && !showSudoku && (
                       <View style={styles.bottomNav}>
-                        {/* ... (BottomNav buttons) ... */}
+                        <TouchableOpacity onPress={() => props.navigation.navigate('Journal')} style={styles.navButton}>
+                          <JournalIcon />
+                          <Text style={styles.navButtonText}>Journal</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => props.navigation.navigate('Panic')} style={styles.navButton}>
+                          <AlertIcon />
+                          <Text style={styles.navButtonText}>Panic</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => props.navigation.navigate('Timer')} style={styles.navButton}>
+                          <TimerIcon />
+                          <Text style={styles.navButtonText}>Timer</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => props.navigation.navigate('Settings')} style={styles.navButton}>
+                          <SettingsIcon />
+                          <Text style={styles.navButtonText}>Settings</Text>
+                        </TouchableOpacity>
                       </View>
                     )}
 
