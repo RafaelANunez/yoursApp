@@ -25,7 +25,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#FEF2F2',
       },
       safeArea: {
-        backgroundColor: '#FEF2F2'
+        backgroundColor: '#00ffddff'
       },
       headerTitle: {
         fontSize: 20,

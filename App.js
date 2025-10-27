@@ -1,6 +1,8 @@
 import 'react-native-gesture-handler';
 import React, { useState, useEffect, useRef } from 'react';
+// NavigationContainer is the root wrapper for navigation, manages nav state and linking
 import { NavigationContainer } from '@react-navigation/native';
+// Stack navigator provides screens that slide in from the side, with history
 import { createStackNavigator } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -34,9 +36,11 @@ import SudokuScreen from './screens/SudokuScreen';
 import FakeCallSettingsPage from './screens/FakeCallSettingsPage';
 import BackupAndRestorePage from './screens/BackupAndRestorePage';
 
+// Create the navigator - enables stack-based navigation (screens push/pop like a stack)
 const Stack = createStackNavigator();
 
 export default function App() {
+  // Track which screen to show first (Login or Home based on auth state)
   const [initialRoute, setInitialRoute] = useState(null);
   const [isMenuOpen, setMenuOpen] = useState(false);
   const [isFakeCallActive, setFakeCallActive] = useState(false);
@@ -202,15 +206,40 @@ export default function App() {
               onTouchMove={onTouchMove}
               onTouchEnd={onTouchEnd}
             >
-              <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="Login" component={LoginScreen} />
-                <Stack.Screen name="Signup" component={SignupScreen} />
+              {/* Stack.Navigator manages the navigation stack. screenOptions apply to all screens */}
+              {/* NAVIGATION ISSUE: headerShown: false removes back button from all screens */}
+              {/* FIX: Configure headers per-screen instead of hiding all headers */}
+              <Stack.Navigator 
+                initialRouteName={initialRoute} 
+                screenOptions={{
+                  headerShown: true,  // Show headers by default
+                  headerStyle: {
+                    backgroundColor: '#FEF2F2',  // Match app theme
+                  },
+                  headerTintColor: '#000000ff',  // Match text theme
+                }}>
+                {/* Auth Flow Screens - No headers needed */}
+                <Stack.Screen name="Login" options={{ headerShown: false }} component={LoginScreen} />
+                <Stack.Screen name="Signup" options={{ headerShown: false }} component={SignupScreen} />
+
+                {/* Main App Screen (Home) - Uses a function to access navigation props */}
                 <Stack.Screen name="Home">
                   {props => (
                     <SafeAreaView style={styles.container}>
                       <StatusBar barStyle="dark-content" backgroundColor="#FEF2F2" />
+                      {/* remove full AppHeader (visual header bar) and use a small floating menu button instead
+                          This removes the top header while keeping the SideMenu reachable via the button */}
                       {!isFakeCallActive && !showSudoku && (
-                        <AppHeader onMenuPress={() => setMenuOpen(true)} title="Yours" />
+                        // Floating hamburger menu button — still inside SafeAreaView so it won't overlap notch
+                        <TouchableOpacity
+                          onPress={() => setMenuOpen(true)}       // open side menu
+                          style={styles.menuButton}
+                          accessibilityLabel="Open menu"
+                        >
+                          <View style={styles.hamburgerLine} />
+                          <View style={styles.hamburgerLine} />
+                          <View style={styles.hamburgerLine} />
+                        </TouchableOpacity>
                       )}
                       <View style={styles.contentArea}>
                         {isFakeCallActive ? (
@@ -233,7 +262,7 @@ export default function App() {
                           />
                         )}
                       </View>
-
+                      {/* Bottom tab navigation using Stack navigator's navigate */}
                       {!isFakeCallActive && !showSudoku && (
                         <View style={styles.bottomNav}>
                           <TouchableOpacity onPress={() => props.navigation.navigate('Journal')} style={styles.navButton}>
@@ -255,6 +284,7 @@ export default function App() {
                         </View>
                       )}
 
+                      {/* Side menu navigation - close menu then navigate */}
                       <SideMenu
                         isOpen={isMenuOpen}
                         onClose={() => setMenuOpen(false)}
@@ -267,14 +297,31 @@ export default function App() {
                   )}
                 </Stack.Screen>
 
-                <Stack.Screen name="Journal" component={JournalPage} />
-                <Stack.Screen name="Panic" component={PanicPage} />
-                <Stack.Screen name="Timer" component={TimerPage} />
-                <Stack.Screen name="Settings" component={SettingsPage} />
-                <Stack.Screen name="Contacts" component={ContactsPage} />
-                <Stack.Screen name="FakeCallSettings" component={FakeCallSettingsPage} />
-                <Stack.Screen name="BackupAndRestore" component={BackupAndRestorePage} />
-                <Stack.Screen name="DiscreetMode" component={DiscreetModeSettingsPage} />
+                {/* Main App Screens - Each is a route in the stack */}
+                <Stack.Screen name="Journal" component={JournalPage} options={{ title: 'My Journal' }} />
+                <Stack.Screen name="Panic" component={PanicPage} options={{ title: 'Emergency', headerTitleStyle: { color: '#C70039'} }} />
+                <Stack.Screen name="Timer" component={TimerPage} options={{ title: 'Safety Timer' }}/>
+                <Stack.Screen name="Settings" component={SettingsPage}/>
+                {/* Settings Sub-Screens - Each needs a header for back navigation */}
+                <Stack.Screen name="Contacts" 
+                  component={ContactsPage}
+                  options={{ title: 'Emergency Contacts' }}
+                />
+                <Stack.Screen 
+                  name="FakeCallSettings" 
+                  component={FakeCallSettingsPage}
+                  options={{ title: 'Fake Call Settings' }}
+                />
+                <Stack.Screen 
+                  name="BackupAndRestore" 
+                  component={BackupAndRestorePage}
+                  options={{ title: 'Backup & Restore' }}
+                />
+                <Stack.Screen 
+                  name="DiscreetMode" 
+                  component={DiscreetModeSettingsPage}
+                  options={{ title: 'Discreet Mode' }}
+                />
               </Stack.Navigator>
             </View>
           </NavigationContainer>
@@ -297,4 +344,20 @@ const styles = StyleSheet.create({
   },
   navButton: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   navButtonText: { fontSize: 12, color: '#4B5563', marginTop: 4 },
+  
+  menuButton: {position: 'absolute',
+    top: 12,       // small offset from top of SafeAreaView
+    left: 12,
+    zIndex: 50,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+  },
+  hamburgerLine: {
+    height: 2,
+    width: 24,
+    backgroundColor: '#4B5563',
+    marginVertical: 2,
+    borderRadius: 1,
+  },
 });
