@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from './AuthContext'; // Import useAuth
 
 const JournalContext = createContext();
 
@@ -14,18 +15,44 @@ export const useJournal = () => {
 export const JournalProvider = ({ children }) => {
   const [entries, setEntries] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // --- MODIFIED: Get user from AuthContext ---
+  const { user } = useAuth();
+  // State to hold the user-specific storage key
+  const [storageKey, setStorageKey] = useState(null);
 
-  const STORAGE_KEY = '@journal_entries';
-
+  // --- MODIFIED: Set storage key based on user ---
   useEffect(() => {
-    loadEntries();
-  }, []);
+    if (user?.email) {
+      // If user is logged in, set their unique storage key
+      setStorageKey(`@${user.email}_journal_entries`);
+    } else {
+      // User logged out, clear the key and any loaded data
+      setStorageKey(null);
+      setEntries([]);
+      setIsLoading(false);
+    }
+  }, [user]); // This effect re-runs when the user logs in or out
+
+  // --- MODIFIED: Load entries only when storageKey is set ---
+  useEffect(() => {
+    if (storageKey) {
+      // Once the storageKey is set, load the entries from it
+      loadEntries();
+    }
+  }, [storageKey]); // This effect re-runs when the storageKey changes
 
   const loadEntries = async () => {
+    if (!storageKey) return; // Guard against running before key is set
+    
+    setIsLoading(true);
     try {
-      const stored = await AsyncStorage.getItem(STORAGE_KEY);
+      // Use the dynamic, user-specific key
+      const stored = await AsyncStorage.getItem(storageKey);
       if (stored) {
         setEntries(JSON.parse(stored));
+      } else {
+        setEntries([]); // Set to empty array if nothing is stored for this user
       }
     } catch (error) {
       console.error('Error loading journal entries:', error);
@@ -35,15 +62,20 @@ export const JournalProvider = ({ children }) => {
   };
 
   const saveEntries = async (newEntries) => {
+    if (!storageKey) return; // Guard against running if no user is logged in
+    
     try {
       const sortedEntries = newEntries.sort((a, b) => new Date(b.date) - new Date(a.date));
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sortedEntries));
+      // Use the dynamic, user-specific key
+      await AsyncStorage.setItem(storageKey, JSON.stringify(sortedEntries));
       setEntries(sortedEntries);
     } catch (error) {
       console.error('Error saving journal entries:', error);
       throw error;
     }
   };
+
+  // --- (No changes needed below, as they all rely on 'saveEntries') ---
 
   const addEntry = async (entry) => {
     const newEntry = {

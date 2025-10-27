@@ -1,55 +1,19 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react'; // Removed useEffect and useState
 import { View, Text, Modal, TouchableOpacity, StyleSheet, Pressable, Image } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-// Assuming Icons.js is in the same components directory or adjust the path
+// Removed AsyncStorage, as AuthContext handles it
+import { useAuth } from '../context/AuthContext'; // IMPORTED: To get user and logout function
 import { CloseIcon, ContactIcon, EyeOffIcon } from './Icons';
 
-// Use the component signature from the user-uploaded SideMenu.js
 export const SideMenu = ({ isOpen, onClose, onNavigate }) => {
-  const [displayName, setDisplayName] = useState('User');
-  const [profilePicUri, setProfilePicUri] = useState(null); // State for profile picture URI
+  // --- MODIFIED: Get user and logout from AuthContext ---
+  const { user, logout } = useAuth(); 
 
-  useEffect(() => {
-    const loadUserData = async () => {
-      try {
-        const stored = await AsyncStorage.getItem('@user_credentials');
-        if (stored) {
-          const creds = JSON.parse(stored);
+  // --- MODIFIED: Set display name and pic directly from auth user ---
+  // Provide fallbacks in case user data is partial
+  const displayName = user?.name || user?.email?.split('@')[0] || 'User';
+  const profilePicUri = user?.profilePic || null; // Get profile pic URI from user object
 
-          // Load display name logic (from user's SideMenu.js)
-          if (creds.name && creds.name.trim().length) {
-            setDisplayName(creds.name);
-          } else if (creds.email) {
-            const local = creds.email.split('@')[0] || 'User';
-            const friendly = local.replace(/[._]/g, ' ').split(' ').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
-            setDisplayName(friendly);
-          } else {
-            setDisplayName('User');
-          }
-
-          // Load profile picture URI
-          if (creds.profilePic) {
-            setProfilePicUri(creds.profilePic);
-          } else {
-            setProfilePicUri(null); // Explicitly set null if not found
-          }
-          return; // Exit after loading
-        }
-        // If no credentials found, reset both
-        setDisplayName('User');
-        setProfilePicUri(null);
-      } catch (e) {
-        console.warn('Could not load user data', e);
-        // Reset on error
-        setDisplayName('User');
-        setProfilePicUri(null);
-      }
-    };
-
-    if (isOpen) {
-      loadUserData(); // Load both name and picture when menu opens
-    }
-  }, [isOpen]); // Re-run effect when isOpen changes
+  // --- REMOVED: The entire useEffect block that loaded data from AsyncStorage ---
 
   return (
     <Modal
@@ -59,15 +23,15 @@ export const SideMenu = ({ isOpen, onClose, onNavigate }) => {
       onRequestClose={onClose}
     >
       <Pressable style={styles.modalBackdrop} onPress={onClose}>
-          {/* Ensure profile container is at the top */}
           <View style={styles.sideMenu}>
               <TouchableOpacity onPress={onClose} style={styles.sideMenuCloseButton}>
                   <CloseIcon />
               </TouchableOpacity>
-              {/* Profile section with dynamic image */}
+              
+              {/* Profile section now uses data from AuthContext */}
               <View style={styles.profileContainer}>
                   <Image
-                      // Use profilePicUri if available, otherwise fallback to placeholder
+                      // Use profilePicUri from context, otherwise fallback to placeholder
                       source={
                         profilePicUri
                           ? { uri: profilePicUri }
@@ -75,8 +39,10 @@ export const SideMenu = ({ isOpen, onClose, onNavigate }) => {
                       }
                       style={styles.profileImage}
                   />
+                  {/* Use displayName from context */}
                   <Text style={styles.profileName}>{displayName}</Text>
               </View>
+
               {/* Navigation links below profile */}
               <View style={styles.sideMenuNav}>
                   {/* Existing navigation links */}
@@ -97,17 +63,13 @@ export const SideMenu = ({ isOpen, onClose, onNavigate }) => {
                       <Text style={styles.sideMenuLinkText}>Discreet Mode</Text>
                   </TouchableOpacity>
 
-                  {/* Logout Button (from user's SideMenu.js) */}
+                  {/* --- MODIFIED: Logout Button --- */}
                   <TouchableOpacity
                     style={styles.sideMenuLink}
                     onPress={async () => {
-                      try {
-                        await AsyncStorage.removeItem('@logged_in'); // Clear login flag
-                        onClose(); // Close the menu
-                        onNavigate('Login'); // Navigate to Login
-                      } catch (e) {
-                        console.warn('Logout failed', e);
-                      }
+                      onClose(); // Close the menu
+                      logout(); // Call logout from AuthContext
+                      // Navigation to 'Login' is now handled by App.js
                     }}
                   >
                     <Text style={[styles.sideMenuLinkText, { color: '#EF4444', marginLeft: 0 }]}>Log out</Text>
@@ -119,7 +81,7 @@ export const SideMenu = ({ isOpen, onClose, onNavigate }) => {
   );
 };
 
-// Styles (combination of original and user's SideMenu.js styles)
+// Styles remain the same
 const styles = StyleSheet.create({
     modalBackdrop: {
         flex: 1,
@@ -138,12 +100,12 @@ const styles = StyleSheet.create({
       },
       sideMenuCloseButton: {
         position: 'absolute',
-        top: 40, // Adjust for status bar/notch if needed
+        top: 40, 
         right: 20,
         padding: 8,
       },
       profileContainer: {
-        marginTop: 64, // Space below close button
+        marginTop: 64, 
         alignItems: 'center',
         borderBottomWidth: 1,
         borderBottomColor: '#E5E7EB',
@@ -154,7 +116,7 @@ const styles = StyleSheet.create({
         height: 96,
         borderRadius: 48,
         marginBottom: 12,
-        backgroundColor: '#FEE2E2', // Added placeholder bg color
+        backgroundColor: '#FEE2E2', 
       },
       profileName: {
         fontSize: 18,
@@ -176,7 +138,7 @@ const styles = StyleSheet.create({
         textAlign: 'left',
         fontSize: 18,
         color: '#374151',
-        marginLeft: 16, // Space between icon and text
+        marginLeft: 16, 
       },
        menuIcon: {
         fontSize: 24,

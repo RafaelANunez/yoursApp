@@ -1,15 +1,18 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { PageHeader } from '../components/PageHeader';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../context/AuthContext'; // IMPORTED: To get the logout function
 
 // Takes { navigation } directly from props passed by Stack.Screen
 export const SettingsPage = ({ navigation }) => {
-  const handleLogout = async () => {
+  const { logout } = useAuth(); // ADDED: Get logout function from context
+
+  const handleLogout = () => {
     try {
-      await AsyncStorage.removeItem('@logged_in');
-      // Replace the current navigation stack with Login screen
-      navigation.replace('Login');
+      // --- MODIFIED: Use the logout function from AuthContext ---
+      logout();
+      // Navigation is now handled automatically by App.js 
+      // when the isLoggedIn state changes.
     } catch (e) {
       console.warn('Logout failed', e);
       Alert.alert('Error', 'Could not log out');
@@ -21,15 +24,42 @@ export const SettingsPage = ({ navigation }) => {
       {/* Uses navigation.goBack() passed from Stack Navigator */}
       <PageHeader title="Settings" onBack={() => navigation.goBack()} />
       <View style={styles.pageContainer}>
+        
+        {/* --- ADDED: Link to User Profile Settings --- */}
+        <TouchableOpacity 
+          style={styles.buttonStyle} 
+          onPress={() => navigation.navigate('UserProfileSettings')}
+        >
+             <Text style={styles.linkText}>User Profile</Text>
+        </TouchableOpacity>
+        
         {/* Uses navigation.navigate() */}
-        <TouchableOpacity onPress={() => navigation.navigate('FakeCallSettings')}>
+        <TouchableOpacity 
+          style={styles.buttonStyle} 
+          onPress={() => navigation.navigate('FakeCallSettings')}
+        >
           <Text style={styles.linkText}>Fake Call Settings</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={{marginTop: 20}} onPress={() => navigation.navigate('BackupAndRestore')}>
+
+        {/* --- ADDED: Link to Discreet Mode (from App.js) --- */}
+        <TouchableOpacity 
+          style={styles.buttonStyle} 
+          onPress={() => navigation.navigate('DiscreetMode')}
+        >
+          <Text style={styles.linkText}>Discreet Mode</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.buttonStyle} 
+          onPress={() => navigation.navigate('BackupAndRestore')}
+        >
           <Text style={styles.linkText}>Backup & Restore</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={{marginTop: 24}} onPress={handleLogout}>
+        <TouchableOpacity 
+          style={[styles.buttonStyle, { marginTop: 24 }]} // Keep top margin for last button
+          onPress={handleLogout}
+        >
           <Text style={[styles.linkText, { color: '#EF4444' }]}>Log out</Text>
         </TouchableOpacity>
       </View>
@@ -41,12 +71,17 @@ export const SettingsPage = ({ navigation }) => {
 const styles = StyleSheet.create({
     fullPage: {
         flex: 1,
-        backgroundColor: '#FFF8F8', // Added background color to match others
+        backgroundColor: '#FFF8F8', 
     },
     pageContainer: {
         flex: 1,
         alignItems: 'center',
         padding: 20,
+    },
+    // --- ADDED: A wrapper style for the touchable ---
+    buttonStyle: {
+        width: '100%', // Make buttons full width
+        marginBottom: 15, // Add spacing between buttons
     },
     linkText: {
         fontSize: 18,
@@ -56,7 +91,7 @@ const styles = StyleSheet.create({
         borderColor: '#FEE2E2',
         borderRadius: 8,
         textAlign: 'center',
-        minWidth: 200,
-        backgroundColor: 'white', // Added background for better visibility
+        // minWidth: 200, // Removed to allow full width
+        backgroundColor: 'white', 
     },
 });

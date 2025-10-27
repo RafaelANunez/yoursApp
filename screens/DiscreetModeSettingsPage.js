@@ -2,8 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, TextInput, Alert } from 'react-native';
 import { PageHeader } from '../components/PageHeader';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '../context/AuthContext'; // IMPORTED: To get the current user
 
 const DiscreetModeSettingsPage = ({ navigation }) => {
+  const { user } = useAuth(); // ADDED: Get the logged-in user
+
+  // (Existing state remains the same)
   const [discreetModeEnabled, setDiscreetModeEnabled] = useState(false);
   const [sudokuScreenEnabled, setSudokuScreenEnabled] = useState(false);
   const [twoFingerTriggerEnabled, setTwoFingerTriggerEnabled] = useState(false);
@@ -12,22 +16,47 @@ const DiscreetModeSettingsPage = ({ navigation }) => {
   const [newBypassCode, setNewBypassCode] = useState('');
   const [isLoading, setIsLoading] = useState(true);
 
-  const DISCREET_MODE_KEY = '@discreet_mode_enabled';
-  const SUDOKU_SCREEN_KEY = '@sudoku_screen_enabled';
-  const BYPASS_CODE_KEY = '@bypass_code';
-  const TWO_FINGER_TRIGGER_KEY = '@two_finger_trigger_enabled';
+  // REMOVED: Old static keys
+  // const DISCREET_MODE_KEY = '@discreet_mode_enabled';
+  // ... (etc)
 
+  // ADDED: State to hold the dynamic, user-specific keys
+  const [keys, setKeys] = useState(null);
+
+  // ADDED: Effect to set the keys when the user logs in
   useEffect(() => {
-    loadSettings();
-  }, []);
+    if (user?.email) {
+      // Create keys based on the user's email
+      setKeys({
+        DISCREET_MODE_KEY: `@${user.email}_discreet_mode_enabled`,
+        SUDOKU_SCREEN_KEY: `@${user.email}_sudoku_screen_enabled`,
+        BYPASS_CODE_KEY: `@${user.email}_bypass_code`,
+        TWO_FINGER_TRIGGER_KEY: `@${user.email}_two_finger_trigger_enabled`,
+      });
+    } else {
+      // User is logged out, clear keys
+      setKeys(null);
+    }
+  }, [user]); // Re-run when the user object changes
+
+  // MODIFIED: Load settings *after* the keys have been set
+  useEffect(() => {
+    if (keys) {
+      loadSettings();
+    }
+  }, [keys]); // Re-run when the 'keys' object is ready
 
   const loadSettings = async () => {
+    if (!keys) return; // ADDED: Guard clause
+
+    setIsLoading(true); // Moved from old useEffect
     try {
+      // MODIFIED: Use dynamic keys from state
       const [discreet, sudoku, code, twoFinger] = await Promise.all([
-        AsyncStorage.getItem(DISCREET_MODE_KEY),
-        AsyncStorage.getItem(SUDOKU_SCREEN_KEY),
-        AsyncStorage.getItem(BYPASS_CODE_KEY),
-        AsyncStorage.getItem(TWO_FINGER_TRIGGER_KEY),
+        AsyncStorage.getItem(keys.DISCREET_MODE_KEY),
+        AsyncStorage.getItem(keys.SUDOKU_SCREEN_KEY),
+        AsyncStorage.getItem(keys.BYPASS_CODE_KEY),
+        AsyncStorage.getItem(keys.TWO_FINGER_TRIGGER_KEY),
       ]);
       setDiscreetModeEnabled(discreet === 'true');
       setSudokuScreenEnabled(sudoku === 'true');
@@ -41,8 +70,10 @@ const DiscreetModeSettingsPage = ({ navigation }) => {
   };
 
   const toggleDiscreetMode = async (value) => {
+    if (!keys) return; // ADDED: Guard clause
     try {
-      await AsyncStorage.setItem(DISCREET_MODE_KEY, value.toString());
+      // MODIFIED: Use dynamic key
+      await AsyncStorage.setItem(keys.DISCREET_MODE_KEY, value.toString());
       setDiscreetModeEnabled(value);
     } catch (error) {
       Alert.alert('Error', 'Failed to update discreet mode setting.');
@@ -50,12 +81,15 @@ const DiscreetModeSettingsPage = ({ navigation }) => {
   };
 
   const toggleSudokuScreen = async (value) => {
+    if (!keys) return; // ADDED: Guard clause
+
     if (value && !bypassCode) {
       Alert.alert('Bypass Code Required', 'Please set a bypass code first before enabling the sudoku screen.');
       return;
     }
     try {
-      await AsyncStorage.setItem(SUDOKU_SCREEN_KEY, value.toString());
+      // MODIFIED: Use dynamic key
+      await AsyncStorage.setItem(keys.SUDOKU_SCREEN_KEY, value.toString());
       setSudokuScreenEnabled(value);
     } catch (error) {
       Alert.alert('Error', 'Failed to update sudoku screen setting.');
@@ -63,12 +97,15 @@ const DiscreetModeSettingsPage = ({ navigation }) => {
   };
 
   const toggleTwoFingerTrigger = async (value) => {
+    if (!keys) return; // ADDED: Guard clause
+
     if (value && !bypassCode) {
       Alert.alert('Bypass Code Required', 'Please set a bypass code first before enabling the two-finger trigger.');
       return;
     }
     try {
-      await AsyncStorage.setItem(TWO_FINGER_TRIGGER_KEY, value.toString());
+      // MODIFIED: Use dynamic key
+      await AsyncStorage.setItem(keys.TWO_FINGER_TRIGGER_KEY, value.toString());
       setTwoFingerTriggerEnabled(value);
     } catch (error) {
       Alert.alert('Error', 'Failed to update two-finger trigger setting.');
@@ -83,6 +120,8 @@ const DiscreetModeSettingsPage = ({ navigation }) => {
   };
 
   const handleSaveBypassCode = async () => {
+    if (!keys) return; // ADDED: Guard clause
+
     if (!validateBypassCode(newBypassCode)) {
       Alert.alert(
         'Invalid Code',
@@ -92,11 +131,13 @@ const DiscreetModeSettingsPage = ({ navigation }) => {
     }
     try {
       const isFirstTime = !bypassCode;
-      await AsyncStorage.setItem(BYPASS_CODE_KEY, newBypassCode);
+      // MODIFIED: Use dynamic key
+      await AsyncStorage.setItem(keys.BYPASS_CODE_KEY, newBypassCode);
       setBypassCode(newBypassCode);
 
       if (isFirstTime) {
-        await AsyncStorage.setItem(TWO_FINGER_TRIGGER_KEY, 'true');
+        // MODIFIED: Use dynamic key
+        await AsyncStorage.setItem(keys.TWO_FINGER_TRIGGER_KEY, 'true');
         setTwoFingerTriggerEnabled(true);
       }
 
@@ -122,6 +163,10 @@ const DiscreetModeSettingsPage = ({ navigation }) => {
       setNewBypassCode(filtered);
     }
   };
+
+  // (The rest of the component's JSX and styles remain unchanged)
+  // ... (loading view, JSX for toggles, modal, etc.) ...
+  // ... (styles) ...
 
   if (isLoading) {
     return (

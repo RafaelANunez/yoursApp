@@ -1,32 +1,37 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image, SafeAreaView } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LockIcon, MailIcon } from '../components/Icons'; // Assuming icons are in ../components/Icons.js
+import { useAuth } from '../context/AuthContext'; // Import useAuth
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false); // Added loading state
+  const auth = useAuth(); // Get auth context
 
   const handleLogin = async () => {
     if (!email || !password) {
       Alert.alert('Validation', 'Please enter both email and password.');
       return;
     }
-
+    
+    setIsLoading(true); // Set loading true
+    
     try {
-      const stored = await AsyncStorage.getItem('@user_credentials');
-      if (stored) {
-        const creds = JSON.parse(stored);
-        if (creds.email === email && creds.password === password) {
-          await AsyncStorage.setItem('@logged_in', 'true');
-          navigation.replace('Home'); // Replace login screen with Home
-          return;
-        }
-      }
-      Alert.alert('Login Failed', 'Invalid email or password.');
+      // --- MODIFIED: Use auth.login ---
+      // We pass the email (trimmed) and password to the context
+      await auth.login(email.trim(), password);
+      
+      // navigation.replace('Home') is no longer needed here.
+      // App.js listens to the `isLoggedIn` state from AuthContext
+      // and will automatically navigate to the 'Home' screen.
+      
     } catch (error) {
       console.error('Login error:', error);
-      Alert.alert('Error', 'An error occurred during login.');
+      // Display the error message thrown from AuthContext
+      Alert.alert('Login Failed', error.message || 'Invalid email or password.');
+    } finally {
+      setIsLoading(false); // Set loading false
     }
   };
 
@@ -34,12 +39,8 @@ export default function LoginScreen({ navigation }) {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.topShape}></View>
       <View style={styles.container}>
-        {/*
-          FIX: Corrected path from ../../assets to ../assets
-          (Assuming 'assets' folder is at the root, and this file is in 'screens')
-        */}
         <Image
-          source={require('../assets/logo_version1.png')} // Using an existing asset
+          source={require('../assets/logo_version1.png')} 
           style={styles.illustration}
           resizeMode="contain"
         />
@@ -74,26 +75,25 @@ export default function LoginScreen({ navigation }) {
           <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-          <Text style={styles.loginButtonText}>LOG IN</Text>
+        {/* --- MODIFIED: Button shows loading state --- */}
+        <TouchableOpacity 
+          style={[styles.loginButton, isLoading && styles.buttonDisabled]} 
+          onPress={handleLogin}
+          disabled={isLoading}
+        >
+          <Text style={styles.loginButtonText}>
+            {isLoading ? 'LOGGING IN...' : 'LOG IN'}
+          </Text>
         </TouchableOpacity>
 
         <Text style={styles.orConnectText}>Or connect using</Text>
 
         <View style={styles.socialButtonsContainer}>
           <TouchableOpacity style={styles.socialButton}>
-            {/*
-              FIX: Corrected path from ../../assets to ../assets
-              (You'll need to add 'facebook-icon.png' to your 'assets' folder)
-            */}
             {/* <Image source={require('../assets/facebook-icon.png')} style={styles.socialIcon} /> */}
             <Text style={styles.socialButtonText}>Facebook</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.socialButton, styles.googleButton]}>
-            {/*
-              FIX: Corrected path from ../../assets to ../assets
-              (You'll need to add 'google-icon.png' to your 'assets' folder)
-            */}
             {/* <Image source={require('../assets/google-icon.png')} style={styles.socialIcon} /> */}
             <Text style={styles.socialButtonText}>Google</Text>
           </TouchableOpacity>
@@ -110,7 +110,6 @@ export default function LoginScreen({ navigation }) {
   );
 }
 
-// Styles from previous response
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -121,22 +120,22 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: '35%', // Roughly matches the blue area in the example
-    backgroundColor: '#ffdedeff', // A light pink for the top background
+    height: '35%', 
+    backgroundColor: '#ffdedeff', 
     borderBottomLeftRadius: 50,
     borderBottomRightRadius: 50,
   },
   container: {
     flex: 1,
     paddingHorizontal: 30,
-    paddingTop: '20%', // Adjust for the top shape
+    paddingTop: '20%', 
     alignItems: 'center',
   },
   illustration: {
     width: '100%',
-    height: 270, // Adjust height as needed
+    height: 270, 
     marginBottom: 0,
-    top: -50, // Move it up to overlap the top shape slightly
+    top: -50, 
   },
   welcomeTitle: {
     fontSize: 26,
@@ -158,12 +157,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 25,
     borderWidth: 1,
-    borderColor: '#F87171', // Light pink border
+    borderColor: '#F87171', 
     height: 50,
     marginBottom: 15,
     paddingHorizontal: 15,
     width: '100%',
-    elevation: 2, // Subtle shadow
+    elevation: 2, 
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -183,10 +182,10 @@ const styles = StyleSheet.create({
   },
   forgotPasswordText: {
     fontSize: 14,
-    color: '#F87171', // Main pink color
+    color: '#F87171', 
   },
   loginButton: {
-    backgroundColor: '#F87171', // Main pink button
+    backgroundColor: '#F87171', 
     borderRadius: 25,
     height: 50,
     justifyContent: 'center',
@@ -198,6 +197,10 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  // --- ADDED: Style for disabled button ---
+  buttonDisabled: {
+    backgroundColor: '#FECACA', // Lighter pink
   },
   orConnectText: {
     fontSize: 14,
@@ -219,7 +222,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#F87171',
     height: 50,
-    width: '48%', // Adjust for spacing
+    width: '48%', 
   },
   googleButton: {
     // Specific styles for Google if needed
@@ -243,7 +246,7 @@ const styles = StyleSheet.create({
   },
   signupLink: {
     fontSize: 14,
-    color: '#F87171', // Main pink color
+    color: '#F87171', 
     fontWeight: 'bold',
   },
 });

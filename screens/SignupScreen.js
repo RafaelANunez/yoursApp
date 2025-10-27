@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image, SafeAreaView } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import Ionicons from '@expo/vector-icons/Ionicons'; // For the back arrow icon
-import { UserIcon, MailIcon, PhoneIcon, LockIcon } from '../components/Icons'; // Assuming you have these or similar icons
+import { UserIcon, MailIcon, PhoneIcon, LockIcon } from '../components/Icons'; 
+import { useAuth } from '../context/AuthContext'; // Import useAuth
 
 export default function SignupScreen({ navigation }) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState(''); // Added phone field
+  const [phone, setPhone] = useState(''); 
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
-  const [imageUri, setImageUri] = useState(null); // State for image URI
+  const [imageUri, setImageUri] = useState(null); 
+  const [isLoading, setIsLoading] = useState(false); // Added loading state
+  const auth = useAuth(); // Get auth context
 
   // Function to pick an image
   const pickImage = async () => {
@@ -38,7 +40,7 @@ export default function SignupScreen({ navigation }) {
       Alert.alert('Validation', 'Please fill all required fields.');
       return false;
     }
-    // Phone is optional in this design, so not strictly required by validate
+    // Phone is optional
     if (password.length < 6) {
       Alert.alert('Validation', 'Password should be at least 6 characters.');
       return false;
@@ -52,21 +54,31 @@ export default function SignupScreen({ navigation }) {
 
   const handleSignup = async () => {
     if (!validate()) return;
-
+    
+    setIsLoading(true); // Set loading true
+    
+    // --- MODIFIED: Use auth.signup ---
     try {
       const creds = {
         name: name.trim(),
-        email: email.trim(),
-        phone: phone.trim(), // Include phone
-        password,
+        email: email.trim().toLowerCase(), // Always store email lowercase
+        phone: phone.trim(), 
+        password, // In a real app, you should HASH this password
         profilePic: imageUri // Add the image URI here
       };
-      await AsyncStorage.setItem('@user_credentials', JSON.stringify(creds));
-      await AsyncStorage.setItem('@logged_in', 'true');
-      navigation.replace('Home');
+      
+      await auth.signup(creds);
+      
+      // navigation.replace('Home') is no longer needed.
+      // App.js will handle the navigation state change automatically
+      // when `isLoggedIn` becomes true in AuthContext.
+      
     } catch (err) {
       console.error('Signup error:', err);
-      Alert.alert('Error', 'Could not create account.');
+      // Display the error message thrown from AuthContext
+      Alert.alert('Error', err.message || 'Could not create account.');
+    } finally {
+      setIsLoading(false); // Set loading false
     }
   };
 
@@ -103,7 +115,7 @@ export default function SignupScreen({ navigation }) {
           <MailIcon style={styles.inputIcon} color="#9CA3AF" />
           <TextInput
             style={styles.input}
-            placeholder="Username"
+            placeholder="Username (Email)" // Changed placeholder for clarity
             placeholderTextColor="#9CA3AF"
             value={email}
             onChangeText={setEmail}
@@ -145,8 +157,15 @@ export default function SignupScreen({ navigation }) {
           />
         </View>
 
-        <TouchableOpacity style={styles.createButton} onPress={handleSignup}>
-          <Text style={styles.createButtonText}>CREATE</Text>
+        {/* --- MODIFIED: Button shows loading state --- */}
+        <TouchableOpacity 
+          style={[styles.createButton, isLoading && styles.buttonDisabled]} 
+          onPress={handleSignup}
+          disabled={isLoading}
+        >
+          <Text style={styles.createButtonText}>
+            {isLoading ? 'CREATING...' : 'CREATE'}
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.loginPrompt}>
@@ -174,7 +193,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 40,
     left: 20,
-    zIndex: 1, // Ensure it's above other elements
+    zIndex: 1, 
     padding: 10,
   },
   title: {
@@ -183,7 +202,7 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 8,
     textAlign: 'center',
-    marginTop: 20, // Adjust to accommodate back button
+    marginTop: 20, 
   },
   subtitle: {
     fontSize: 14,
@@ -198,7 +217,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#FEE2E2', // Light pink background
+    backgroundColor: '#FEE2E2', 
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
@@ -210,7 +229,7 @@ const styles = StyleSheet.create({
     borderRadius: 50,
   },
   imagePickerText: {
-    color: '#F87171', // Main pink color
+    color: '#F87171', 
     textAlign: 'center',
     fontSize: 12,
   },
@@ -220,12 +239,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 25,
     borderWidth: 1,
-    borderColor: '#FBCFE8', // Light pink border
+    borderColor: '#FBCFE8', 
     height: 50,
     marginBottom: 15,
     paddingHorizontal: 15,
     width: '100%',
-    elevation: 2, // Subtle shadow
+    elevation: 2, 
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
@@ -240,7 +259,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   createButton: {
-    backgroundColor: '#F87171', // Main pink button
+    backgroundColor: '#F87171', 
     borderRadius: 25,
     height: 50,
     justifyContent: 'center',
@@ -254,6 +273,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
+  // --- ADDED: Style for disabled button ---
+  buttonDisabled: {
+    backgroundColor: '#FECACA', // Lighter pink
+  },
   loginPrompt: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -265,7 +288,7 @@ const styles = StyleSheet.create({
   },
   loginLink: {
     fontSize: 14,
-    color: '#F87171', // Main pink color
+    color: '#F87171', 
     fontWeight: 'bold',
   },
 });
