@@ -22,6 +22,7 @@
     "expo-dev-client": "~6.0.15",
     "expo-document-picker": "~14.0.7",
     "expo-file-system": "~19.0.17",
+    "expo-image-picker": "~17.0.8",
     "expo-location": "~19.0.7",
     "expo-sharing": "~14.0.7",
     "expo-sms": "~14.0.7",
@@ -37,6 +38,7 @@
     "react-native-screens": "^4.18.0",
     "react-native-share": "^12.2.0",
     "react-native-svg": "^15.12.1",
+    "react-native-vector-icons": "^10.3.0",
     "react-native-volume-manager": "^2.0.8",
     "react-native-web": "^0.21.0",
     "react-navigation": "^5.0.0"
