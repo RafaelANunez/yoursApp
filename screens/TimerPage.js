@@ -13,6 +13,7 @@ import {
   Modal, // Import Modal
   TextInput, // Import TextInput
   Switch, // Import Switch
+  ActivityIndicator, // Added for loading state
 } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { PageHeader } from '../components/PageHeader';
@@ -25,6 +26,7 @@ import * as Location from 'expo-location'; // Import Location
 const ITEM_HEIGHT = 50;
 const VISIBLE_ITEMS = 3;
 const screenWidth = Dimensions.get('window').width;
+const LAST_TIMER_KEY = '@last_timer_duration'; // Key for AsyncStorage
 
 // --- Light Theme Colors ---
 const mainColor = '#F87171'; // App's main pink color
@@ -108,12 +110,14 @@ const WheelPicker = ({ data, selectedValue, onSelect, label }) => {
 // --- Timer Page Component ---
 export const TimerPage = ({ navigation }) => {
   const { contacts } = useEmergencyContacts();
+  // Initialize state with default values, will be updated by useEffect
   const [selectedHour, setSelectedHour] = useState(0);
   const [selectedMinute, setSelectedMinute] = useState(10);
   const [selectedSecond, setSelectedSecond] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [totalSeconds, setTotalSeconds] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
+  const [isLoadingDefaults, setIsLoadingDefaults] = useState(true); // Loading state
   const intervalRef = useRef(null);
 
   // --- Modal State ---
@@ -123,6 +127,29 @@ export const TimerPage = ({ navigation }) => {
 
   const HOURS = Array.from({ length: 24 }, (_, i) => i);
   const MINUTES_SECONDS = Array.from({ length: 60 }, (_, i) => i);
+
+  // --- Load last timer duration on mount ---
+  useEffect(() => {
+    const loadLastTimer = async () => {
+      try {
+        const storedDuration = await AsyncStorage.getItem(LAST_TIMER_KEY);
+        if (storedDuration) {
+          const { hour, minute, second } = JSON.parse(storedDuration);
+          setSelectedHour(hour);
+          setSelectedMinute(minute);
+          setSelectedSecond(second);
+        }
+        // else keep the initial default values (0h 10m 0s)
+      } catch (error) {
+        console.error('Error loading last timer duration:', error);
+        // Keep default values on error
+      } finally {
+        setIsLoadingDefaults(false); // Finish loading
+      }
+    };
+
+    loadLastTimer();
+  }, []); // Run only once on mount
 
   // --- Timer Logic ---
   useEffect(() => {
@@ -152,12 +179,27 @@ export const TimerPage = ({ navigation }) => {
   }, [isRunning, secondsLeft]);
 
   // --- Timer Actions ---
-  const startTimer = () => {
+  const startTimer = async () => { // Make async to save duration
     const total = selectedHour * 3600 + selectedMinute * 60 + selectedSecond;
     if (total <= 0) {
       Alert.alert('Invalid time', 'Please set a duration greater than 0 seconds.');
       return;
     }
+
+    // --- Save the current duration ---
+    try {
+      const durationToSave = JSON.stringify({
+        hour: selectedHour,
+        minute: selectedMinute,
+        second: selectedSecond,
+      });
+      await AsyncStorage.setItem(LAST_TIMER_KEY, durationToSave);
+    } catch (error) {
+      console.error('Error saving last timer duration:', error);
+      // Continue even if saving fails
+    }
+    // --- End Save ---
+
     setTotalSeconds(total);
     setSecondsLeft(total);
     setIsRunning(true);
@@ -177,15 +219,21 @@ export const TimerPage = ({ navigation }) => {
     setIsRunning(false);
     setSecondsLeft(0);
     setTotalSeconds(0);
-    setSelectedHour(0);
-    setSelectedMinute(10);
-    setSelectedSecond(0);
+    // Don't reset selected values, keep the last used/loaded ones
+    // setSelectedHour(0);
+    // setSelectedMinute(10);
+    // setSelectedSecond(0);
   };
 
   const setPreset = (hours = 0, minutes = 0, seconds = 0) => {
-    setSelectedHour(hours);
-    setSelectedMinute(minutes);
-    setSelectedSecond(seconds);
+    // Check if timer is running or paused, only allow preset setting if idle
+    if (secondsLeft === 0 && !isRunning) {
+        setSelectedHour(hours);
+        setSelectedMinute(minutes);
+        setSelectedSecond(seconds);
+    } else {
+        Alert.alert('Timer Active', 'Cannot set preset while timer is running or paused.');
+    }
   };
 
   // --- Timer Completion ---
@@ -263,7 +311,8 @@ export const TimerPage = ({ navigation }) => {
               accuracy: Location.Accuracy.High,
             });
             const { latitude, longitude } = location.coords;
-            fullMessage += `\nMy location: https://www.google.com/maps?q=${latitude},${longitude}`;
+            // Updated link format for Google Maps
+            fullMessage += `\nMy location: https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
           } catch (locationError) {
             console.error('Error getting location', locationError);
             fullMessage += '\n(Could not get current location.)';
@@ -306,38 +355,49 @@ export const TimerPage = ({ navigation }) => {
   const strokeDashoffset = CIRCLE_CIRCUMFERENCE - progress * CIRCLE_CIRCUMFERENCE;
 
   // --- Render Setup View ---
-  const renderSetup = () => (
-    <>
-      <Text style={styles.infoText}>
-        Set a timer for your safety. If it runs out, you'll be prompted to message your emergency contacts.
-      </Text>
+  const renderSetup = () => {
+    // Show loading indicator while defaults are loading
+    if (isLoadingDefaults) {
+      return (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={mainColor} />
+        </View>
+      );
+    }
 
-      <View style={styles.wheelRow}>
-        <WheelPicker data={HOURS} selectedValue={selectedHour} onSelect={setSelectedHour} label="HH" />
-        <WheelPicker data={MINUTES_SECONDS} selectedValue={selectedMinute} onSelect={setSelectedMinute} label="MM" />
-        <WheelPicker data={MINUTES_SECONDS} selectedValue={selectedSecond} onSelect={setSelectedSecond} label="SS" />
-      </View>
+    return (
+      <>
+        <Text style={styles.infoText}>
+          Set a timer for your safety. If it runs out, you'll be prompted to message your emergency contacts.
+        </Text>
 
-      <View style={styles.presetContainer}>
-        <TouchableOpacity style={styles.presetButton} onPress={() => setPreset(0, 10, 0)}>
-          <Text style={styles.presetButtonText}>10:00</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.presetButton} onPress={() => setPreset(0, 45, 0)}>
-          <Text style={styles.presetButtonText}>45:00</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.presetButton} onPress={() => setPreset(1, 0, 0)}>
-          <Text style={styles.presetButtonText}>1:00:00</Text>
-        </TouchableOpacity>
-      </View>
+        <View style={styles.wheelRow}>
+          <WheelPicker data={HOURS} selectedValue={selectedHour} onSelect={setSelectedHour} label="HH" />
+          <WheelPicker data={MINUTES_SECONDS} selectedValue={selectedMinute} onSelect={setSelectedMinute} label="MM" />
+          <WheelPicker data={MINUTES_SECONDS} selectedValue={selectedSecond} onSelect={setSelectedSecond} label="SS" />
+        </View>
 
-      <TouchableOpacity style={styles.controlButton} onPress={startTimer}>
-        {/* Play Icon */}
-        <Svg width="32" height="32" viewBox="0 0 24 24" fill={backgroundColor}>
-          <Path d="M8 5v14l11-7z" />
-        </Svg>
-      </TouchableOpacity>
-    </>
-  );
+        <View style={styles.presetContainer}>
+          <TouchableOpacity style={styles.presetButton} onPress={() => setPreset(0, 10, 0)}>
+            <Text style={styles.presetButtonText}>10:00</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.presetButton} onPress={() => setPreset(0, 45, 0)}>
+            <Text style={styles.presetButtonText}>45:00</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.presetButton} onPress={() => setPreset(1, 0, 0)}>
+            <Text style={styles.presetButtonText}>1:00:00</Text>
+          </TouchableOpacity>
+        </View>
+
+        <TouchableOpacity style={styles.controlButton} onPress={startTimer}>
+          {/* Play Icon */}
+          <Svg width="32" height="32" viewBox="0 0 24 24" fill={backgroundColor}>
+            <Path d="M8 5v14l11-7z" />
+          </Svg>
+        </TouchableOpacity>
+      </>
+    );
+  };
 
   // --- Render Running View ---
   const renderRunning = () => {
@@ -378,10 +438,10 @@ export const TimerPage = ({ navigation }) => {
         </View>
 
         <View style={styles.presetContainer}>
-          <TouchableOpacity style={styles.presetButton} onPress={() => setSecondsLeft(prev => prev + 600)}>
+          <TouchableOpacity style={styles.presetButton} onPress={() => setSecondsLeft(prev => Math.max(0, prev + 600))}>
             <Text style={styles.presetButtonText}>+10 min</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.presetButton} onPress={() => setSecondsLeft(prev => prev + 300)}>
+          <TouchableOpacity style={styles.presetButton} onPress={() => setSecondsLeft(prev => Math.max(0, prev + 300))}>
             <Text style={styles.presetButtonText}>+5 min</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.presetButton} onPress={cancelTimer}>
@@ -543,6 +603,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-evenly', // Changed from space-around
     paddingVertical: 20, // Reduced from 30
     paddingHorizontal: 20,
+  },
+  loadingContainer: { // Style for loading indicator
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   infoText: {
     fontSize: 16,
