@@ -1,4 +1,5 @@
 import React, { useRef } from 'react';
+import { Platform } from 'react-native';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, Animated, Image } from 'react-native';
 import * as Location from 'expo-location';
 import * as SMS from 'expo-sms';

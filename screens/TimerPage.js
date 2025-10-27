@@ -1,5 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Linking, ScrollView, Dimensions } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  Linking,
+  ScrollView,
+  Dimensions,
+  Platform,
+  Vibration, // Import Vibration
+  Modal, // Import Modal
+  TextInput, // Import TextInput
+  Switch, // Import Switch
+  ActivityIndicator, // Added for loading state
+} from 'react-native';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { PageHeader } from '../components/PageHeader';
 import { useEmergencyContacts } from '../context/EmergencyContactsContext';
 import * as SMS from 'expo-sms';

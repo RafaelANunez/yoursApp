@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Platform } from 'react-native';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert } from 'react-native';
 import { PageHeader } from '../components/PageHeader';
 import AsyncStorage from '@react-native-async-storage/async-storage';

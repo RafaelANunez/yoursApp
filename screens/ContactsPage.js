@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Platform } from 'react-native';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { PageHeader } from '../components/PageHeader';
 import { ContactFormModal } from '../components/ContactFormModal';

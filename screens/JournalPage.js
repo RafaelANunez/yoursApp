@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { Platform } from 'react-native';
 import { View, Text, SectionList, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useJournal } from '../context/JournalContext';
 import { PageHeader } from '../components/PageHeader';

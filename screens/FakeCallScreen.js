@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Platform } from 'react-native';
 import { View, Text, TouchableOpacity, StyleSheet, Image, Vibration, Alert, Animated } from 'react-native';
 import { Audio } from 'expo-av';
 import * as Location from 'expo-location';

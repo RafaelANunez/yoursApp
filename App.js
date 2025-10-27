@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   Text,
 } from 'react-native';
+import { Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { VolumeManager } from 'react-native-volume-manager';
 
