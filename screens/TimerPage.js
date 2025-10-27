@@ -119,7 +119,7 @@ export const TimerPage = ({ navigation }) => {
   // --- Modal State ---
   const [timerCompleteModalVisible, setTimerCompleteModalVisible] = useState(false);
   const [customMessage, setCustomMessage] = useState('');
-  const [shareLocation, setShareLocation] = useState(true);
+  const [shareLocation, setShareLocation] = useState(false);
 
   const HOURS = Array.from({ length: 24 }, (_, i) => i);
   const MINUTES_SECONDS = Array.from({ length: 60 }, (_, i) => i);

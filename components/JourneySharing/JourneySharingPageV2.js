@@ -26,7 +26,8 @@ import {
 import { getSharingConfig, saveSharingConfig } from '../../utils/journeySharing/storage';
 import { getActiveSessions } from '../../utils/journeySharing/storage';
 
-const JourneySharingPageV2 = ({ onBack, onNavigate }) => {
+// *** MODIFIED: Added navigation prop ***
+const JourneySharingPageV2 = ({ navigation, onNavigate }) => {
   // Share location state
   const [isSharingActive, setIsSharingActive] = useState(false);
   const [shareCode, setShareCode] = useState('');
@@ -377,7 +378,7 @@ const JourneySharingPageV2 = ({ onBack, onNavigate }) => {
               <View style={styles.trackActions}>
                 <TouchableOpacity
                   style={styles.trackButton}
-                  onPress={() => onNavigate && onNavigate('TrackingDetail', track.id)}
+                  onPress={() => onNavigate && onNavigate('TrackingDetail', { sessionId: track.id })} // Pass sessionId as param
                 >
                   <Text style={styles.trackButtonText}>View</Text>
                 </TouchableOpacity>
@@ -424,6 +425,7 @@ const JourneySharingPageV2 = ({ onBack, onNavigate }) => {
             value={shareCode}
             onChangeText={handleShareCodeChange}
             placeholder="my-location-code"
+            placeholderTextColor="#9CA3AF" // *** MODIFIED: Added placeholder color ***
             autoCapitalize="none"
             autoCorrect={false}
           />
@@ -445,6 +447,7 @@ const JourneySharingPageV2 = ({ onBack, onNavigate }) => {
             value={password}
             onChangeText={setPassword}
             placeholder="Enter password"
+            placeholderTextColor="#9CA3AF" // *** MODIFIED: Added placeholder color ***
             secureTextEntry={!showPassword}
             autoCapitalize="none"
             autoCorrect={false}
@@ -636,7 +639,8 @@ const JourneySharingPageV2 = ({ onBack, onNavigate }) => {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+        {/* *** MODIFIED: Use navigation.goBack() *** */}
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Journey Sharing</Text>
