@@ -121,8 +121,8 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: '39%', // Roughly matches the blue area in the example
-    backgroundColor: '#F87171', // A light pink for the top background
+    height: '35%', // Roughly matches the blue area in the example
+    backgroundColor: '#ffdedeff', // A light pink for the top background
     borderBottomLeftRadius: 50,
     borderBottomRightRadius: 50,
   },
@@ -134,15 +134,15 @@ const styles = StyleSheet.create({
   },
   illustration: {
     width: '100%',
-    height: 220, // Adjust height as needed
+    height: 270, // Adjust height as needed
     marginBottom: 0,
     top: -50, // Move it up to overlap the top shape slightly
   },
   welcomeTitle: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: '#ffffffff',
-    marginBottom: 8,
+    color: '#666',
+    marginBottom: 15,
     textAlign: 'center',
   },
   welcomeSubtitle: {

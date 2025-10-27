@@ -103,7 +103,7 @@ export default function SignupScreen({ navigation }) {
           <MailIcon style={styles.inputIcon} color="#9CA3AF" />
           <TextInput
             style={styles.input}
-            placeholder="Useranme"
+            placeholder="Username"
             placeholderTextColor="#9CA3AF"
             value={email}
             onChangeText={setEmail}
