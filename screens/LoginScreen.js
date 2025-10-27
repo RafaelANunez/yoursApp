@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image, SafeAreaView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LockIcon, MailIcon } from '../components/Icons'; // Assuming you have these or similar icons
+import { LockIcon, MailIcon } from '../components/Icons'; // Assuming icons are in ../components/Icons.js
 
 export default function LoginScreen({ navigation }) {
   const [email, setEmail] = useState('');
@@ -34,8 +34,12 @@ export default function LoginScreen({ navigation }) {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.topShape}></View>
       <View style={styles.container}>
+        {/*
+          FIX: Corrected path from ../../assets to ../assets
+          (Assuming 'assets' folder is at the root, and this file is in 'screens')
+        */}
         <Image
-          source={require('../../assets/login-illustration.png')} // Create this image in your assets folder
+          source={require('../assets/logo_version1.png')} // Using an existing asset
           style={styles.illustration}
           resizeMode="contain"
         />
@@ -78,11 +82,19 @@ export default function LoginScreen({ navigation }) {
 
         <View style={styles.socialButtonsContainer}>
           <TouchableOpacity style={styles.socialButton}>
-            <Image source={require('../../assets/facebook-icon.png')} style={styles.socialIcon} /> {/* Add these icons */}
+            {/*
+              FIX: Corrected path from ../../assets to ../assets
+              (You'll need to add 'facebook-icon.png' to your 'assets' folder)
+            */}
+            {/* <Image source={require('../assets/facebook-icon.png')} style={styles.socialIcon} /> */}
             <Text style={styles.socialButtonText}>Facebook</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.socialButton, styles.googleButton]}>
-            <Image source={require('../../assets/google-icon.png')} style={styles.socialIcon} />
+            {/*
+              FIX: Corrected path from ../../assets to ../assets
+              (You'll need to add 'google-icon.png' to your 'assets' folder)
+            */}
+            {/* <Image source={require('../assets/google-icon.png')} style={styles.socialIcon} /> */}
             <Text style={styles.socialButtonText}>Google</Text>
           </TouchableOpacity>
         </View>
@@ -98,6 +110,7 @@ export default function LoginScreen({ navigation }) {
   );
 }
 
+// Styles from previous response
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -209,7 +222,7 @@ const styles = StyleSheet.create({
     width: '48%', // Adjust for spacing
   },
   googleButton: {
-    // Specific styles for Google if needed, e.g., different border or text color
+    // Specific styles for Google if needed
   },
   socialIcon: {
     width: 20,
