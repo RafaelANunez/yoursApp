@@ -50,7 +50,7 @@ export default function LoginScreen({ navigation }) {
           <MailIcon style={styles.inputIcon} color="#9CA3AF" />
           <TextInput
             style={styles.input}
-            placeholder="Email"
+            placeholder="Username"
             placeholderTextColor="#9CA3AF"
             value={email}
             onChangeText={setEmail}
@@ -114,15 +114,15 @@ export default function LoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: 'white',
+    backgroundColor: '#FFF8F8',
   },
   topShape: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: '35%', // Roughly matches the blue area in the example
-    backgroundColor: '#FBCFE8', // A light pink for the top background
+    height: '39%', // Roughly matches the blue area in the example
+    backgroundColor: '#F87171', // A light pink for the top background
     borderBottomLeftRadius: 50,
     borderBottomRightRadius: 50,
   },
@@ -134,14 +134,14 @@ const styles = StyleSheet.create({
   },
   illustration: {
     width: '100%',
-    height: 180, // Adjust height as needed
-    marginBottom: 20,
+    height: 220, // Adjust height as needed
+    marginBottom: 0,
     top: -50, // Move it up to overlap the top shape slightly
   },
   welcomeTitle: {
     fontSize: 26,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#ffffffff',
     marginBottom: 8,
     textAlign: 'center',
   },
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 25,
     borderWidth: 1,
-    borderColor: '#FBCFE8', // Light pink border
+    borderColor: '#F87171', // Light pink border
     height: 50,
     marginBottom: 15,
     paddingHorizontal: 15,
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     borderRadius: 25,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#F87171',
     height: 50,
     width: '48%', // Adjust for spacing
   },
