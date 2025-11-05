@@ -1,5 +1,17 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image, SafeAreaView } from 'react-native';
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  TouchableOpacity, 
+  StyleSheet, 
+  Alert, 
+  Image, 
+  SafeAreaView,
+  ScrollView,
+  KeyboardAvoidingView, // For keyboard handling
+  Platform // To check OS for KeyboardAvoidingView
+} from 'react-native';
 import { LockIcon, MailIcon } from '../components/Icons'; // Assuming icons are in ../components/Icons.js
 import { useAuth } from '../context/AuthContext'; // Import useAuth
 
@@ -38,74 +50,86 @@ export default function LoginScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.topShape}></View>
-      <View style={styles.container}>
-        <Image
-          source={require('../assets/logo_version1.png')} 
-          style={styles.illustration}
-          resizeMode="contain"
-        />
-        <Text style={styles.welcomeTitle}>Welcome back!</Text>
-        <Text style={styles.welcomeSubtitle}>Log in to your existing account of YourApp</Text>
-
-        <View style={styles.inputGroup}>
-          <MailIcon style={styles.inputIcon} color="#9CA3AF" />
-          <TextInput
-            style={styles.input}
-            placeholder="Username"
-            placeholderTextColor="#9CA3AF"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-        </View>
-        <View style={styles.inputGroup}>
-          <LockIcon style={styles.inputIcon} color="#9CA3AF" />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#9CA3AF"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
-        </View>
-
-        <TouchableOpacity style={styles.forgotPasswordButton} onPress={() => Alert.alert('Forgot Password', 'Feature to be implemented.')}>
-          <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-        </TouchableOpacity>
-
-        {/* --- MODIFIED: Button shows loading state --- */}
-        <TouchableOpacity 
-          style={[styles.loginButton, isLoading && styles.buttonDisabled]} 
-          onPress={handleLogin}
-          disabled={isLoading}
+      
+      {/* --- ADDED KeyboardAvoidingView Wrapper --- */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled" // Good for dismissing keyboard on tap
         >
-          <Text style={styles.loginButtonText}>
-            {isLoading ? 'LOGGING IN...' : 'LOG IN'}
-          </Text>
-        </TouchableOpacity>
+          <Image
+            source={require('../assets/logo_version1.png')} 
+            style={styles.illustration}
+            resizeMode="contain"
+          />
+          <Text style={styles.welcomeTitle}>Welcome back!</Text>
+          <Text style={styles.welcomeSubtitle}>Log in to your existing account of YoursApp</Text>
 
-        <Text style={styles.orConnectText}>Or connect using</Text>
+          <View style={styles.inputGroup}>
+            <MailIcon style={styles.inputIcon} color="#9CA3AF" />
+            <TextInput
+              style={styles.input}
+              placeholder="Username"
+              placeholderTextColor="#9CA3AF"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </View>
+          <View style={styles.inputGroup}>
+            <LockIcon style={styles.inputIcon} color="#9CA3AF" />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor="#9CA3AF"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+          </View>
 
-        <View style={styles.socialButtonsContainer}>
-          <TouchableOpacity style={styles.socialButton}>
-            {/* <Image source={require('../assets/facebook-icon.png')} style={styles.socialIcon} /> */}
-            <Text style={styles.socialButtonText}>Facebook</Text>
+          <TouchableOpacity style={styles.forgotPasswordButton} onPress={() => Alert.alert('Forgot Password', 'Feature to be implemented.')}>
+            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.socialButton, styles.googleButton]}>
-            {/* <Image source={require('../assets/google-icon.png')} style={styles.socialIcon} /> */}
-            <Text style={styles.socialButtonText}>Google</Text>
-          </TouchableOpacity>
-        </View>
 
-        <View style={styles.signupPrompt}>
-          <Text style={styles.signupPromptText}>Don't have an account? </Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
-            <Text style={styles.signupLink}>Sign Up</Text>
+          <TouchableOpacity 
+            style={[styles.loginButton, isLoading && styles.buttonDisabled]} 
+            onPress={handleLogin}
+            disabled={isLoading}
+          >
+            <Text style={styles.loginButtonText}>
+              {isLoading ? 'LOGGING IN...' : 'LOG IN'}
+            </Text>
           </TouchableOpacity>
-        </View>
-      </View>
+
+          <Text style={styles.orConnectText}>Or connect using</Text>
+
+          <View style={styles.socialButtonsContainer}>
+            <TouchableOpacity style={styles.socialButton}>
+              {/* <Image source={require('../assets/facebook-icon.png')} style={styles.socialIcon} /> */}
+              <Text style={styles.socialButtonText}>Facebook</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.socialButton, styles.googleButton]}>
+              {/* <Image source={require('../assets/google-icon.png')} style={styles.socialIcon} /> */}
+              <Text style={styles.socialButtonText}>Google</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.signupPrompt}>
+            <Text style={styles.signupPromptText}>Don't have an account? </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Signup')}>
+              <Text style={styles.signupLink}>Sign Up</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView> 
+      {/* --- END KeyboardAvoidingView Wrapper --- */}
+
     </SafeAreaView>
   );
 }
@@ -115,27 +139,33 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFF8F8',
   },
+  // --- MODIFIED: Changed height from '35%' to a fixed 280 ---
   topShape: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: '35%', 
+    height: 280, // Fixed height for consistent layout
     backgroundColor: '#ffdedeff', 
     borderBottomLeftRadius: 50,
     borderBottomRightRadius: 50,
   },
-  container: {
+  scrollView: {
     flex: 1,
+  },
+  // --- MODIFIED: Adjusted padding and removed justifyContent ---
+  container: {
+    flexGrow: 1, // Ensures content can grow and be scrollable
     paddingHorizontal: 30,
-    paddingTop: '20%', 
+    paddingTop: 100, // Adjusted for new topShape height
+    paddingBottom: 40, // Added bottom padding for spacing
     alignItems: 'center',
   },
+  // --- MODIFIED: Adjusted height for new layout ---
   illustration: {
-    width: '100%',
-    height: 270, 
-    marginBottom: 0,
-    top: -50, 
+    width: '90%',
+    height: 220, // Adjusted height
+    marginBottom: 20, 
   },
   welcomeTitle: {
     fontSize: 26,
@@ -198,7 +228,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  // --- ADDED: Style for disabled button ---
   buttonDisabled: {
     backgroundColor: '#FECACA', // Lighter pink
   },
@@ -238,7 +267,6 @@ const styles = StyleSheet.create({
   },
   signupPrompt: {
     flexDirection: 'row',
-    marginTop: 20,
   },
   signupPromptText: {
     fontSize: 14,

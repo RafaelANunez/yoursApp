@@ -1,0 +1,27 @@
+[core]
+	repositoryformatversion = 0
+	filemode = false
+	bare = false
+	logallrefupdates = true
+	symlinks = false
+	ignorecase = true
+[submodule]
+	active = .
+[remote "origin"]
+	url = https://github.com/RafaelANunez/yoursApp.git
+	fetch = +refs/heads/*:refs/remotes/origin/*
+[branch "main"]
+	remote = origin
+	merge = refs/heads/main
+	vscode-merge-base = origin/main
+[lfs]
+	repositoryformatversion = 0
+[branch "location-services-merge"]
+	remote = origin
+	merge = refs/heads/location-services-merge
+	vscode-merge-base = origin/location-services-merge
+	github-pr-owner-number = "RafaelANunez#yoursApp#7"
+[branch "c_merge"]
+	remote = origin
+	merge = refs/heads/c_merge
+	vscode-merge-base = origin/c_merge

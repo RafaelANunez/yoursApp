@@ -1,5 +1,18 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image, SafeAreaView } from 'react-native';
+// --- MODIFIED: Import ScrollView, KeyboardAvoidingView, Platform ---
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  TouchableOpacity, 
+  StyleSheet, 
+  Alert, 
+  Image, 
+  SafeAreaView,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform
+} from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import Ionicons from '@expo/vector-icons/Ionicons'; // For the back arrow icon
 import { UserIcon, MailIcon, PhoneIcon, LockIcon } from '../components/Icons'; 
@@ -84,97 +97,110 @@ export default function SignupScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={28} color="#333" />
-        </TouchableOpacity>
+      {/* --- MODIFIED: Back button is now outside the scrolling content --- */}
+      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <Ionicons name="arrow-back" size={28} color="#333" />
+      </TouchableOpacity>
 
-        <Text style={styles.title}>Let's Get Started!</Text>
-        <Text style={styles.subtitle}>Create an account to YourApp to get all features</Text>
-
-        {/* Profile Picture Picker */}
-        <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
-          {imageUri ? (
-            <Image source={{ uri: imageUri }} style={styles.profileImage} />
-          ) : (
-            <Text style={styles.imagePickerText}>Add Profile Picture</Text>
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.inputGroup}>
-          <UserIcon style={styles.inputIcon} color="#9CA3AF" />
-          <TextInput
-            style={styles.input}
-            placeholder="Full Name"
-            placeholderTextColor="#9CA3AF"
-            value={name}
-            onChangeText={setName}
-          />
-        </View>
-        <View style={styles.inputGroup}>
-          <MailIcon style={styles.inputIcon} color="#9CA3AF" />
-          <TextInput
-            style={styles.input}
-            placeholder="Username (Email)" // Changed placeholder for clarity
-            placeholderTextColor="#9CA3AF"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-          />
-        </View>
-        <View style={styles.inputGroup}>
-          <PhoneIcon style={styles.inputIcon} color="#9CA3AF" />
-          <TextInput
-            style={styles.input}
-            placeholder="Phone (Optional)"
-            placeholderTextColor="#9CA3AF"
-            value={phone}
-            onChangeText={setPhone}
-            keyboardType="phone-pad"
-          />
-        </View>
-        <View style={styles.inputGroup}>
-          <LockIcon style={styles.inputIcon} color="#9CA3AF" />
-          <TextInput
-            style={styles.input}
-            placeholder="Password"
-            placeholderTextColor="#9CA3AF"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
-        </View>
-        <View style={styles.inputGroup}>
-          <LockIcon style={styles.inputIcon} color="#9CA3AF" />
-          <TextInput
-            style={styles.input}
-            placeholder="Confirm Password"
-            placeholderTextColor="#9CA3AF"
-            value={confirm}
-            onChangeText={setConfirm}
-            secureTextEntry
-          />
-        </View>
-
-        {/* --- MODIFIED: Button shows loading state --- */}
-        <TouchableOpacity 
-          style={[styles.createButton, isLoading && styles.buttonDisabled]} 
-          onPress={handleSignup}
-          disabled={isLoading}
+      {/* --- MODIFIED: Added KeyboardAvoidingView and ScrollView --- */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.createButtonText}>
-            {isLoading ? 'CREATING...' : 'CREATE'}
-          </Text>
-        </TouchableOpacity>
+          
+          <Text style={styles.title}>Let's Get Started!</Text>
+          <Text style={styles.subtitle}>Create an account to YourApp to get all features</Text>
 
-        <View style={styles.loginPrompt}>
-          <Text style={styles.loginPromptText}>Already have an account? </Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-            <Text style={styles.loginLink}>Login here</Text>
+          {/* Profile Picture Picker */}
+          <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
+            {imageUri ? (
+              <Image source={{ uri: imageUri }} style={styles.profileImage} />
+            ) : (
+              <Text style={styles.imagePickerText}>Add Profile Picture</Text>
+            )}
           </TouchableOpacity>
-        </View>
-      </View>
+
+          <View style={styles.inputGroup}>
+            <UserIcon style={styles.inputIcon} color="#9CA3AF" />
+            <TextInput
+              style={styles.input}
+              placeholder="Full Name"
+              placeholderTextColor="#9CA3AF"
+              value={name}
+              onChangeText={setName}
+            />
+          </View>
+          <View style={styles.inputGroup}>
+            <MailIcon style={styles.inputIcon} color="#9CA3AF" />
+            <TextInput
+              style={styles.input}
+              placeholder="Username (Email)"
+              placeholderTextColor="#9CA3AF"
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
+          </View>
+          <View style={styles.inputGroup}>
+            <PhoneIcon style={styles.inputIcon} color="#9CA3AF" />
+            <TextInput
+              style={styles.input}
+              placeholder="Phone (Optional)"
+              placeholderTextColor="#9CA3AF"
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
+            />
+          </View>
+          <View style={styles.inputGroup}>
+            <LockIcon style={styles.inputIcon} color="#9CA3AF" />
+            <TextInput
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor="#9CA3AF"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+          </View>
+          <View style={styles.inputGroup}>
+            <LockIcon style={styles.inputIcon} color="#9CA3AF" />
+            <TextInput
+              style={styles.input}
+              placeholder="Confirm Password"
+              placeholderTextColor="#9CA3AF"
+              value={confirm}
+              onChangeText={setConfirm}
+              secureTextEntry
+            />
+          </View>
+
+          <TouchableOpacity 
+            style={[styles.createButton, isLoading && styles.buttonDisabled]} 
+            onPress={handleSignup}
+            disabled={isLoading}
+          >
+            <Text style={styles.createButtonText}>
+              {isLoading ? 'CREATING...' : 'CREATE'}
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.loginPrompt}>
+            <Text style={styles.loginPromptText}>Already have an account? </Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+              <Text style={styles.loginLink}>Login here</Text>
+            </TouchableOpacity>
+          </View>
+
+        </ScrollView>
+      </KeyboardAvoidingView>
+      {/* --- END MODIFIED --- */}
     </SafeAreaView>
   );
 }
@@ -184,14 +210,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'white',
   },
-  container: {
+  // --- ADDED: Style for ScrollView itself ---
+  scrollView: {
     flex: 1,
+  },
+  // --- MODIFIED: This now styles the *content* of the ScrollView ---
+  container: {
+    flexGrow: 1, // Ensures content can grow
     paddingHorizontal: 30,
-    paddingTop: 40,
+    paddingTop: 60, // Added padding to clear the back button
+    paddingBottom: 40, // Added bottom padding
   },
   backButton: {
     position: 'absolute',
-    top: 40,
+    top: 50, // Adjusted for clarity (works well with SafeAreaView)
     left: 20,
     zIndex: 1, 
     padding: 10,
@@ -202,7 +234,7 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 8,
     textAlign: 'center',
-    marginTop: 20, 
+    // marginTop: 20, // No longer needed, container padding handles it
   },
   subtitle: {
     fontSize: 14,
@@ -273,7 +305,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  // --- ADDED: Style for disabled button ---
   buttonDisabled: {
     backgroundColor: '#FECACA', // Lighter pink
   },
