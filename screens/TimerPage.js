@@ -14,6 +14,7 @@ import {
   TextInput, // Import TextInput
   Switch, // Import Switch
   ActivityIndicator, // Added for loading state
+  AppState, // <-- Add AppState
 } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { PageHeader } from '../components/PageHeader';
@@ -21,12 +22,17 @@ import { useEmergencyContacts } from '../context/EmergencyContactsContext';
 import * as SMS from 'expo-sms';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location'; // Import Location
+import * as Notifications from 'expo-notifications'; // <-- Add Notifications
 
 // --- Constants ---
 const ITEM_HEIGHT = 50;
 const VISIBLE_ITEMS = 3;
 const screenWidth = Dimensions.get('window').width;
 const LAST_TIMER_KEY = '@last_timer_duration'; // Key for AsyncStorage
+// --- NEW: Keys for background state sync ---
+const TIMER_END_TIME_KEY = '@timer_end_time';
+const TIMER_TOTAL_SECONDS_KEY = '@timer_total_seconds';
+
 
 // --- Light Theme Colors ---
 const mainColor = '#F87171'; // App's main pink color
@@ -119,6 +125,10 @@ export const TimerPage = ({ navigation }) => {
   const [isRunning, setIsRunning] = useState(false);
   const [isLoadingDefaults, setIsLoadingDefaults] = useState(true); // Loading state
   const intervalRef = useRef(null);
+  
+  // --- NEW: Add state for notification and AppState ---
+  const [scheduledNotificationId, setScheduledNotificationId] = useState(null);
+  const appState = useRef(AppState.currentState);
 
   // --- Modal State ---
   const [timerCompleteModalVisible, setTimerCompleteModalVisible] = useState(false);
@@ -151,7 +161,90 @@ export const TimerPage = ({ navigation }) => {
     loadLastTimer();
   }, []); // Run only once on mount
 
-  // --- Timer Logic ---
+  // --- NEW: Handle Notification Permissions & Listeners ---
+  useEffect(() => {
+    // 1. Request permissions on mount
+    (async () => {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please enable notifications to be alerted when the timer finishes.');
+      }
+    })();
+
+    // 2. Set handler for notifications that arrive while app is foregrounded
+    // We don't want to show a popup if the app is already open,
+    // because the `onTimerComplete` function will handle it.
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: false,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+      }),
+    });
+
+    // 3. Set listener for when a user TAPS a notification
+    // This is how we open the modal from a background notification
+    const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
+      // Timer finished! Show the modal.
+      setTimerCompleteModalVisible(true);
+      // We should also clear any stray timer data
+      setSecondsLeft(0);
+      setIsRunning(false);
+      setTotalSeconds(0);
+      AsyncStorage.removeItem(TIMER_END_TIME_KEY);
+      AsyncStorage.removeItem(TIMER_TOTAL_SECONDS_KEY);
+    });
+
+    return () => {
+      Notifications.removeNotificationSubscription(responseListener);
+    };
+  }, []); // Run only once
+
+  // --- NEW: Handle AppState changes (coming from background) ---
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async nextAppState => {
+      // Check if app is coming from background to foreground
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextAppState === 'active'
+      ) {
+        // App has come to the foreground! Let's re-sync the timer.
+        const endTimeString = await AsyncStorage.getItem(TIMER_END_TIME_KEY);
+        
+        if (endTimeString) {
+          const endTime = parseInt(endTimeString, 10);
+          const now = Date.now();
+
+          if (now >= endTime) {
+            // Timer should have finished while we were gone!
+            setSecondsLeft(0);
+            setIsRunning(false);
+            setTotalSeconds(0);
+            await AsyncStorage.removeItem(TIMER_END_TIME_KEY);
+            await AsyncStorage.removeItem(TIMER_TOTAL_SECONDS_KEY);
+            // Show the modal, just in case the notification was missed/dismissed
+            setTimerCompleteModalVisible(true); 
+          } else {
+            // Timer is still running, sync the secondsLeft
+            const totalSecsString = await AsyncStorage.getItem(TIMER_TOTAL_SECONDS_KEY);
+            const total = totalSecsString ? parseInt(totalSecsString, 10) : 0;
+            const newSecondsLeft = Math.round((endTime - now) / 1000);
+
+            setTotalSeconds(total);
+            setSecondsLeft(newSecondsLeft);
+            setIsRunning(true); // Resume the foreground interval
+          }
+        }
+      }
+      appState.current = nextAppState;
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []); // Run only once
+
+  // --- Timer Logic (Foreground) ---
   useEffect(() => {
     if (isRunning && secondsLeft > 0) {
       intervalRef.current = setInterval(() => {
@@ -160,7 +253,7 @@ export const TimerPage = ({ navigation }) => {
             clearInterval(intervalRef.current);
             intervalRef.current = null;
             setIsRunning(false);
-            onTimerComplete(); // Trigger vibration and modal
+            onTimerComplete(); // Trigger vibration and modal (foreground)
             return 0;
           }
           return prev - 1;
@@ -176,17 +269,17 @@ export const TimerPage = ({ navigation }) => {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isRunning, secondsLeft]);
+  }, [isRunning, secondsLeft]); // Note: We keep this existing logic for the *foreground* UI countdown
 
-  // --- Timer Actions ---
-  const startTimer = async () => { // Make async to save duration
+  // --- UPDATED: Timer Actions ---
+  const startTimer = async () => {
     const total = selectedHour * 3600 + selectedMinute * 60 + selectedSecond;
     if (total <= 0) {
       Alert.alert('Invalid time', 'Please set a duration greater than 0 seconds.');
       return;
     }
 
-    // --- Save the current duration ---
+    // --- Save the current duration (existing) ---
     try {
       const durationToSave = JSON.stringify({
         hour: selectedHour,
@@ -196,33 +289,91 @@ export const TimerPage = ({ navigation }) => {
       await AsyncStorage.setItem(LAST_TIMER_KEY, durationToSave);
     } catch (error) {
       console.error('Error saving last timer duration:', error);
-      // Continue even if saving fails
     }
-    // --- End Save ---
+    
+    // --- NEW: Store end time for AppState sync ---
+    const endTime = Date.now() + total * 1000;
+    await AsyncStorage.setItem(TIMER_END_TIME_KEY, String(endTime));
+    await AsyncStorage.setItem(TIMER_TOTAL_SECONDS_KEY, String(total));
+
+    // --- NEW: Schedule the background notification ---
+    try {
+      const notificationId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title: "Timer Finished!",
+          body: "Your safety timer has run out. Open the app to choose an action.",
+          sound: 'default', // Plays the default notification sound
+        },
+        trigger: { seconds: total }, // Fire exactly when the timer ends
+      });
+      setScheduledNotificationId(notificationId);
+    } catch (e) {
+      console.error('Error scheduling notification:', e);
+    }
+    // --- End New ---
 
     setTotalSeconds(total);
     setSecondsLeft(total);
     setIsRunning(true);
   };
 
-  const pauseTimer = () => {
+  // --- UPDATED: pauseTimer ---
+  const pauseTimer = async () => {
+    // --- NEW: Cancel the notification and clear end time ---
+    if (scheduledNotificationId) {
+      await Notifications.cancelScheduledNotificationAsync(scheduledNotificationId);
+      setScheduledNotificationId(null);
+    }
+    await AsyncStorage.removeItem(TIMER_END_TIME_KEY);
+    await AsyncStorage.removeItem(TIMER_TOTAL_SECONDS_KEY);
+    // --- End New ---
+
     setIsRunning(false);
   };
 
-  const resumeTimer = () => {
+  // --- UPDATED: resumeTimer ---
+  const resumeTimer = async () => {
     if (secondsLeft > 0) {
+      // --- NEW: Re-schedule notification for the remaining time ---
+      const endTime = Date.now() + secondsLeft * 1000;
+      await AsyncStorage.setItem(TIMER_END_TIME_KEY, String(endTime));
+      // (totalSeconds should still be correct in state)
+      await AsyncStorage.setItem(TIMER_TOTAL_SECONDS_KEY, String(totalSeconds));
+
+      try {
+        const notificationId = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: "Timer Finished!",
+            body: "Your safety timer has run out. Open the app to choose an action.",
+            sound: 'default',
+          },
+          trigger: { seconds: secondsLeft },
+        });
+        setScheduledNotificationId(notificationId);
+      } catch (e) {
+        console.error('Error scheduling notification:', e);
+      }
+      // --- End New ---
+
       setIsRunning(true);
     }
   };
 
-  const cancelTimer = () => {
+  // --- UPDATED: cancelTimer ---
+  const cancelTimer = async () => {
+    // --- NEW: Cancel the notification and clear end time ---
+    if (scheduledNotificationId) {
+      await Notifications.cancelScheduledNotificationAsync(scheduledNotificationId);
+      setScheduledNotificationId(null);
+    }
+    await AsyncStorage.removeItem(TIMER_END_TIME_KEY);
+    await AsyncStorage.removeItem(TIMER_TOTAL_SECONDS_KEY);
+    // --- End New ---
+
     setIsRunning(false);
     setSecondsLeft(0);
     setTotalSeconds(0);
     // Don't reset selected values, keep the last used/loaded ones
-    // setSelectedHour(0);
-    // setSelectedMinute(10);
-    // setSelectedSecond(0);
   };
 
   const setPreset = (hours = 0, minutes = 0, seconds = 0) => {
@@ -236,9 +387,23 @@ export const TimerPage = ({ navigation }) => {
     }
   };
 
-  // --- Timer Completion ---
-  const onTimerComplete = () => {
-    // Vibrate pattern: [wait, vibrate, wait, vibrate]
+  // --- UPDATED: Timer Completion (for foreground) ---
+  const onTimerComplete = async () => {
+    // --- NEW: Clear storage ---
+    await AsyncStorage.removeItem(TIMER_END_TIME_KEY);
+    await AsyncStorage.removeItem(TIMER_TOTAL_SECONDS_KEY);
+    if (scheduledNotificationId) {
+        // Just in case, try to cancel it
+        try {
+          await Notifications.cancelScheduledNotificationAsync(scheduledNotificationId);
+        } catch (e) {
+          // Ignore error (it probably already fired)
+        }
+        setScheduledNotificationId(null);
+    }
+    // --- End New ---
+
+    // Vibrate pattern: (existing)
     Vibration.vibrate(Platform.OS === 'android' ? [0, 500, 500, 500] : [500, 500, 500]);
     setTimerCompleteModalVisible(true);
   };
