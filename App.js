@@ -13,6 +13,7 @@ import { NavigationContainer, useNavigationContainerRef } from '@react-navigatio
 import { createStackNavigator } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { VolumeManager } from 'react-native-volume-manager';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AppHeader } from './components/AppHeader';
 import { SideMenu } from './components/SideMenu';
@@ -31,6 +32,7 @@ import SignupScreen from './screens/SignupScreen';
 
 // Core App Screens
 import { HomePage } from './screens/HomePage';
+import SecondaryHomeScreen from './screens/SecondaryHomeScreen';
 import { JournalPage } from './screens/JournalPage';
 import { PanicPage } from './screens/PanicPage';
 import { TimerPage } from './screens/TimerPage';
@@ -116,11 +118,7 @@ function AppContent() {
         // Callback for Fake Call
         onFakeCall: () => {
            if (navigationRef.isReady()) {
-               // 1. Force navigation to Home first. 
-               // This ensures the component that holds the FakeCallScreen is actually mounted.
                navigationRef.navigate('Home');
-               
-               // 2. Small delay to allow navigation to complete before setting state
                setTimeout(() => {
                    setFakeCallActive(true);
                }, 100);
@@ -138,7 +136,6 @@ function AppContent() {
                 navigationRef.navigate('Timer');
             }
         },
-        // Pass ref for default actions
         navigation: navigationRef
     });
 
@@ -341,127 +338,139 @@ function AppContent() {
   }
 
   return (
-    <NavigationContainer ref={navigationRef}>
-      <View
-        style={styles.touchContainer}
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-      >
-        <Stack.Navigator
-          initialRouteName={isLoggedIn ? 'Home' : 'Login'}
-          screenOptions={{ headerShown: false }}
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <NavigationContainer ref={navigationRef}>
+        <View
+          style={styles.touchContainer}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
         >
-          {isLoggedIn ? (
-            <>
-              <Stack.Screen name="Home">
-                {props => (
-                  <SafeAreaView style={styles.container}>
-                    <StatusBar barStyle="dark-content" backgroundColor="#FEF2F2" />
-                    {!isFakeCallActive && !showSudoku && (
-                      <AppHeader onMenuPress={() => setMenuOpen(true)} title="Yours" />
-                    )}
-                    <View style={styles.contentArea}>
-                      {isFakeCallActive ? (
-                        <FakeCallScreen
-                          onEndCall={() => setFakeCallActive(false)}
-                          callerName={callerName}
-                        />
-                      ) : showSudoku ? (
-                        <SudokuScreen
-                          onBypassSuccess={handleBypassSuccess}
-                          isEmergencyMode={isEmergencyMode}
-                        />
-                      ) : (
-                        <HomePage
-                          {...props}
-                          onFakeCall={() => setFakeCallActive(true)}
-                          screenHoldEnabled={screenHoldEnabled}
-                          screenHoldDuration={screenHoldDuration}
-                          onNavigateToJournal={() => props.navigation.navigate('Journal')}
-                          // --- THE FIX IS HERE ---
-                          onOpenMenu={() => setMenuOpen(true)}
-                        />
+          <Stack.Navigator
+            initialRouteName={isLoggedIn ? 'Home' : 'Login'}
+            screenOptions={{ headerShown: false }}
+          >
+            {isLoggedIn ? (
+              <>
+                <Stack.Screen name="Home">
+                  {props => (
+                    <SafeAreaView style={styles.container}>
+                      <StatusBar barStyle="dark-content" backgroundColor="#FEF2F2" />
+                      {!isFakeCallActive && !showSudoku && (
+                        <AppHeader onMenuPress={() => setMenuOpen(true)} title="Yours" />
                       )}
-                    </View>
-                    
-                    {!isFakeCallActive && !showSudoku && (
-                      <View style={styles.bottomNav}>
-                        <TouchableOpacity onPress={() => props.navigation.navigate('Journal')} style={styles.navButton}>
-                          <JournalIcon />
-                          <Text style={styles.navButtonText}>Journal</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => props.navigation.navigate('Panic')} style={styles.navButton}>
-                          <AlertIcon />
-                          <Text style={styles.navButtonText}>Panic</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => props.navigation.navigate('Timer')} style={styles.navButton}>
-                          <TimerIcon />
-                          <Text style={styles.navButtonText}>Timer</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => props.navigation.navigate('Settings')} style={styles.navButton}>
-                          <SettingsIcon />
-                          <Text style={styles.navButtonText}>Settings</Text>
-                        </TouchableOpacity>
+                      <View style={styles.contentArea}>
+                        {isFakeCallActive ? (
+                          <FakeCallScreen
+                            onEndCall={() => setFakeCallActive(false)}
+                            callerName={callerName}
+                          />
+                        ) : showSudoku ? (
+                          <SudokuScreen
+                            onBypassSuccess={handleBypassSuccess}
+                            isEmergencyMode={isEmergencyMode}
+                          />
+                        ) : (
+                          <HomePage
+                            {...props}
+                            onFakeCall={() => setFakeCallActive(true)}
+                            screenHoldEnabled={screenHoldEnabled}
+                            screenHoldDuration={screenHoldDuration}
+                            onNavigateToJournal={() => props.navigation.navigate('Journal')}
+                            onOpenMenu={() => setMenuOpen(true)}
+                            onTriggerSudoku={() => setShowSudoku(true)}
+                          />
+                        )}
                       </View>
-                    )}
+                      
+                      {!isFakeCallActive && !showSudoku && (
+                        <View style={styles.bottomNav}>
+                          <TouchableOpacity onPress={() => props.navigation.navigate('Journal')} style={styles.navButton}>
+                            <JournalIcon />
+                            <Text style={styles.navButtonText}>Journal</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => props.navigation.navigate('Panic')} style={styles.navButton}>
+                            <AlertIcon />
+                            <Text style={styles.navButtonText}>Panic</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => props.navigation.navigate('Timer')} style={styles.navButton}>
+                            <TimerIcon />
+                            <Text style={styles.navButtonText}>Timer</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => props.navigation.navigate('Settings')} style={styles.navButton}>
+                            <SettingsIcon />
+                            <Text style={styles.navButtonText}>Settings</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
 
-                    <SideMenu
-                      isOpen={isMenuOpen}
-                      onClose={() => setMenuOpen(false)}
-                      onNavigate={page => {
-                        setMenuOpen(false);
-                        props.navigation.navigate(page);
+                      <SideMenu
+                        isOpen={isMenuOpen}
+                        onClose={() => setMenuOpen(false)}
+                        onNavigate={page => {
+                          setMenuOpen(false);
+                          props.navigation.navigate(page);
+                        }}
+                      />
+                    </SafeAreaView>
+                  )}
+                </Stack.Screen>
+
+                <Stack.Screen
+                  name="SecondaryHome"
+                  component={SecondaryHomeScreen}
+                  options={{
+                    headerShown: false,
+                    presentation: 'modal',
+                    animation: 'slide_from_bottom',
+                  }}
+                />
+
+                <Stack.Screen name="Journal" component={JournalPage} />
+                <Stack.Screen name="Panic" component={PanicPage} />
+                <Stack.Screen name="Timer" component={TimerPage} />
+                <Stack.Screen name="Settings" component={SettingsPage} />
+                <Stack.Screen name="Contacts" component={ContactsPage} />
+                
+                <Stack.Screen name="FakeCallSettings">
+                  {props => (
+                    <FakeCallSettingsPage
+                      {...props}
+                      settings={{
+                        callerName,
+                        screenHoldEnabled,
+                        volumeHoldEnabled,
+                        screenHoldDuration,
+                        volumeHoldDuration,
+                      }}
+                      onSave={newSettings => {
+                        if (user?.email) {
+                          onSaveFakeCallSettings(user.email, newSettings);
+                        }
                       }}
                     />
-                  </SafeAreaView>
-                )}
-              </Stack.Screen>
+                  )}
+                </Stack.Screen>
+                
+                <Stack.Screen name="BackupAndRestore" component={BackupAndRestorePage} />
+                <Stack.Screen name="DiscreetMode" component={DiscreetModeSettingsPage} />
+                <Stack.Screen name="UserProfileSettings" component={UserProfileSettingsPage} />
 
-              <Stack.Screen name="Journal" component={JournalPage} />
-              <Stack.Screen name="Panic" component={PanicPage} />
-              <Stack.Screen name="Timer" component={TimerPage} />
-              <Stack.Screen name="Settings" component={SettingsPage} />
-              <Stack.Screen name="Contacts" component={ContactsPage} />
-              
-              <Stack.Screen name="FakeCallSettings">
-                {props => (
-                  <FakeCallSettingsPage
-                    {...props}
-                    settings={{
-                      callerName,
-                      screenHoldEnabled,
-                      volumeHoldEnabled,
-                      screenHoldDuration,
-                      volumeHoldDuration,
-                    }}
-                    onSave={newSettings => {
-                      if (user?.email) {
-                        onSaveFakeCallSettings(user.email, newSettings);
-                      }
-                    }}
-                  />
-                )}
-              </Stack.Screen>
-              
-              <Stack.Screen name="BackupAndRestore" component={BackupAndRestorePage} />
-              <Stack.Screen name="DiscreetMode" component={DiscreetModeSettingsPage} />
-              <Stack.Screen name="UserProfileSettings" component={UserProfileSettingsPage} />
-
-              <Stack.Screen name="JourneySharing" component={JourneySharingPageV2} />
-              <Stack.Screen name="TrackAFriend" component={TrackAFriendPage} />
-              <Stack.Screen name="TrackingDetail" component={TrackingDetailPage} />
-              <Stack.Screen name="LocationHistory" component={LocationHistoryPage} />
-            </>
-          ) : (
-            <>
-              <Stack.Screen name="Login" component={LoginScreen} />
-              <Stack.Screen name="Signup" component={SignupScreen} />
-            </>
-          )}
-        </Stack.Navigator>
-      </View>
-    </NavigationContainer>
+                <Stack.Screen name="JourneySharing" component={JourneySharingPageV2} />
+                <Stack.Screen name="TrackAFriend" component={TrackAFriendPage} />
+                <Stack.Screen name="TrackingDetail" component={TrackingDetailPage} />
+                <Stack.Screen name="LocationHistory" component={LocationHistoryPage} />
+              </>
+            ) : (
+              <>
+                <Stack.Screen name="Login" component={LoginScreen} />
+                <Stack.Screen name="Signup" component={SignupScreen} />
+              </>
+            )}
+          </Stack.Navigator>
+        </View>
+      </NavigationContainer>
+    </GestureHandlerRootView>
   );
 }
 

@@ -1,26 +1,62 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Platform, Pressable, PanResponder } from 'react-native';
+import { GestureDetector, Gesture, Directions } from 'react-native-gesture-handler';
 
 const PageContainer = ({ children }) => (
     <View style={styles.pageContainer}>{children}</View>
 );
 
-export const HomePage = ({ onFakeCall, screenHoldEnabled, screenHoldDuration, onNavigateToJournal, onOpenMenu }) => {
+export const HomePage = ({ 
+  onFakeCall, 
+  screenHoldEnabled, 
+  screenHoldDuration, 
+  onNavigateToJournal, 
+  onOpenMenu, 
+  navigation,
+  route, // Ensure route is destructured here
+  onTriggerSudoku 
+}) => {
   const pressTimeout = useRef(null);
+
+  // --- FIX: More reliable parameter listening ---
+  useEffect(() => {
+    // Add a listener that fires every time this screen comes into focus
+    const unsubscribe = navigation.addListener('focus', () => {
+        // Check the current params on the route
+        // We use 'route.params' which should be up-to-date if we used 'merge: true' in navigation
+        if (route.params?.triggerFakeCall) {
+            // Clear param immediately so it doesn't trigger again on next generic focus
+            navigation.setParams({ triggerFakeCall: undefined });
+            if (onFakeCall) onFakeCall();
+        } 
+        else if (route.params?.triggerSudoku) {
+             navigation.setParams({ triggerSudoku: undefined });
+             if (onTriggerSudoku) onTriggerSudoku();
+        }
+    });
+
+    return unsubscribe;
+  }, [navigation, route, onFakeCall, onTriggerSudoku]);
+  // ---------------------------------------------
+
+  const swipeUpGesture = Gesture.Fling()
+    .direction(Directions.UP)
+    .onEnd(() => {
+      if (navigation) {
+          navigation.navigate('SecondaryHome');
+      }
+    });
 
   const panResponder = useRef(
     PanResponder.create({
-      // Activate if swipe starts within 50px of the left edge and is moving right
       onMoveShouldSetPanResponder: (evt, gestureState) => {
         return gestureState.x0 < 50 && gestureState.dx > 10;
       },
-      // If swiped more than 50px to the right, trigger menu open
       onPanResponderRelease: (evt, gestureState) => {
         if (gestureState.dx > 50 && onOpenMenu) {
           onOpenMenu();
         }
       },
-      // Ensure standard touches pass through if not swiping
       onPanResponderTerminationRequest: () => true,
     })
   ).current;
@@ -29,7 +65,7 @@ export const HomePage = ({ onFakeCall, screenHoldEnabled, screenHoldDuration, on
     if (screenHoldEnabled) {
       pressTimeout.current = setTimeout(() => {
         onFakeCall();
-      }, screenHoldDuration * 1000); // Convert seconds to ms
+      }, screenHoldDuration * 1000);
     }
   };
 
@@ -40,38 +76,40 @@ export const HomePage = ({ onFakeCall, screenHoldEnabled, screenHoldDuration, on
   };
 
   return (
-    <View style={{ flex: 1 }} {...panResponder.panHandlers}>
-      <ImageBackground
-        source={require('../assets/logo version1.png')}
-        style={styles.backgroundImage}
-        imageStyle={styles.backgroundImageStyle}
-      >
-        <TouchableOpacity
-          style={{ flex: 1 }}
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
-          activeOpacity={1}
+    <GestureDetector gesture={swipeUpGesture}>
+        <View style={{ flex: 1 }} {...panResponder.panHandlers}>
+        <ImageBackground
+            source={require('../assets/logo version1.png')}
+            style={styles.backgroundImage}
+            imageStyle={styles.backgroundImageStyle}
         >
-          <PageContainer>
-            <Text style={styles.homeTitle}>Welcome to Yours</Text>
-            <Text style={styles.homeSubtitle}>You are in a safe space.</Text>
-            <Pressable
-              onPress={onNavigateToJournal}
-              style={({ pressed }) => [
-                styles.journalButton,
-                pressed && styles.journalButtonPressed
-              ]}
+            <TouchableOpacity
+            style={{ flex: 1 }}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            activeOpacity={1}
             >
-              {({ pressed }) => (
-                <Text style={[styles.journalButtonText, pressed && styles.journalButtonTextPressed]}>
-                  Go to Journal
-                </Text>
-              )}
-            </Pressable>
-          </PageContainer>
-        </TouchableOpacity>
-      </ImageBackground>
-    </View>
+            <PageContainer>
+                <Text style={styles.homeTitle}>Welcome to Yours</Text>
+                <Text style={styles.homeSubtitle}>You are in a safe space.</Text>
+                <Pressable
+                onPress={onNavigateToJournal}
+                style={({ pressed }) => [
+                    styles.journalButton,
+                    pressed && styles.journalButtonPressed
+                ]}
+                >
+                {({ pressed }) => (
+                    <Text style={[styles.journalButtonText, pressed && styles.journalButtonTextPressed]}>
+                    Go to Journal
+                    </Text>
+                )}
+                </Pressable>
+            </PageContainer>
+            </TouchableOpacity>
+        </ImageBackground>
+        </View>
+    </GestureDetector>
   );
 };
 
