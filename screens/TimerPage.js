@@ -23,15 +23,8 @@ import * as SMS from 'expo-sms';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
-
-// --- SAFE IMPORT: Background Timer ---
-// Sometimes native modules return null in Expo Go, this prevents immediate crashes on import
-let BackgroundTimer;
-try {
-  BackgroundTimer = require('react-native-background-timer').default;
-} catch (e) {
-  console.warn("[TimerPage] BackgroundTimer package not found or failed to load.");
-}
+// --- NEW IMPORT ---
+import BackgroundTimer from 'react-native-background-timer';
 
 // --- Constants ---
 const ITEM_HEIGHT = 50;
@@ -148,7 +141,6 @@ export const TimerPage = ({ navigation }) => {
   const [isLoadingDefaults, setIsLoadingDefaults] = useState(true);
   const [isStarting, setIsStarting] = useState(false);
   
-  const intervalRef = useRef(null);
   const timerFinishTimeRef = useRef(null);
   const appState = useRef(AppState.currentState);
 
@@ -208,6 +200,8 @@ export const TimerPage = ({ navigation }) => {
 
     const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
       console.log("[TimerPage] Notification tapped.");
+      // Since we are using BackgroundTimer, tapping the notification just means "open the app"
+      // The actual completion logic happens in the timer tick or onTimerComplete
       setTimerCompleteModalVisible(true);
     });
 
@@ -218,23 +212,24 @@ export const TimerPage = ({ navigation }) => {
     };
   }, []);
 
-  // --- APP STATE HANDLING ---
-  // Even with BackgroundTimer, we keep this as a backup for UI sync when returning.
+  // --- APP STATE HANDLING (Simplified for BackgroundTimer) ---
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async nextAppState => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
         console.log("[TimerPage] App foregrounded. Syncing UI.");
+        // Just in case BackgroundTimer was killed by OS, we sync up on return.
         const endTimeString = await AsyncStorage.getItem(TIMER_END_TIME_KEY);
         if (endTimeString) {
           const endTime = parseInt(endTimeString, 10);
           const now = Date.now();
           if (now >= endTime) {
              if (!timerCompleteModalVisible) {
-                 console.log("[TimerPage] Timer finished while killed/suspended (Backup check).");
-                 stopTicker();
+                 console.log("[TimerPage] Timer finished while killed/suspended.");
+                 stopBackgroundTicker();
                  onTimerComplete();
              }
           } else {
+             // Sync the visual countdown
              setSecondsLeft(Math.max(1, Math.ceil((endTime - now) / 1000)));
           }
         }
@@ -247,74 +242,16 @@ export const TimerPage = ({ navigation }) => {
     };
   }, [timerCompleteModalVisible]);
 
-  // --- HELPER: Unified Ticker Starter ---
-  const startTicker = () => {
-      // Clear any existing standard JS interval
-      if (intervalRef.current) clearInterval(intervalRef.current);
-
-      // Define the tick logic
-      const tick = () => {
-          const now = Date.now();
-          if (!timerFinishTimeRef.current) return;
-          
-          const remaining = Math.ceil((timerFinishTimeRef.current - now) / 1000);
-
-          if (__DEV__ && remaining >= 0 && remaining <= 5) { 
-               console.log(`[TimerPage] Tick: ${remaining}s (AppState: ${AppState.currentState})`);
-          }
-
-          if (remaining <= 0) {
-            console.log("[TimerPage] Timer finished.");
-            stopTicker();
-            setSecondsLeft(0);
-
-            // Fire immediate notification if we are in background
-            if (AppState.currentState.match(/inactive|background/)) {
-                console.log("[TimerPage] Firing notification from background ticker.");
-                Notifications.scheduleNotificationAsync({
-                    content: {
-                        title: "⏰ Timer Finished!",
-                        body: "Tap here to open the app and choose an action.",
-                        sound: true,
-                        priority: Notifications.AndroidNotificationPriority.HIGH,
-                    },
-                    trigger: null,
-                });
-            }
-            onTimerComplete();
-          } else {
-             setSecondsLeft(prev => (prev !== remaining ? remaining : prev));
-          }
-      };
-
-      // Try to use BackgroundTimer, fall back to standard setInterval if it fails
-      if (BackgroundTimer && typeof BackgroundTimer.runBackgroundTimer === 'function') {
-          console.log("[TimerPage] Starting native BackgroundTimer.");
-          try {
-              BackgroundTimer.runBackgroundTimer(tick, 1000);
-          } catch (e) {
-              console.error("Failed to start BackgroundTimer, falling back to JS interval:", e);
-              intervalRef.current = setInterval(tick, 1000);    
-          }
-      } else {
-          console.warn("[TimerPage] BackgroundTimer not available. Using standard JS interval (will stop in background).");
-          intervalRef.current = setInterval(tick, 1000);
-      }
-  };
-
-  // --- HELPER: Unified Ticker Stopper ---
-  const stopTicker = () => {
-      setIsRunning(false);
-      if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-      }
-      // Safe native stop
-      if (BackgroundTimer && typeof BackgroundTimer.stopBackgroundTimer === 'function') {
-          try {
-             BackgroundTimer.stopBackgroundTimer();
-          } catch(e) { console.warn("Error stopping background timer:", e); }
-      }
+  // --- HELPER: Stop Background Timer ---
+  const stopBackgroundTicker = () => {
+    // We use a global or module-level approach for BackgroundTimer if needed, 
+    // but usually standard clearInterval works if we pass the ID.
+    // Better safe: BackgroundTimer doesn't always use IDs the same way, 
+    // but for this simple usage, we'll assume standard behavior or just stop it.
+    // NOTE: BackgroundTimer.stop() stops EVERYTHING, be careful if you use it elsewhere.
+    // For this page, it's likely fine to just stop all background timers on this screen.
+     BackgroundTimer.stopBackgroundTimer(); 
+     setIsRunning(false);
   };
 
   const cleanupTimerState = async () => {
@@ -325,15 +262,51 @@ export const TimerPage = ({ navigation }) => {
     await AsyncStorage.removeItem(TIMER_TOTAL_SECONDS_KEY);
   };
 
-  // --- EFFECT: Handle Running State Changes ---
+  // --- BACKGROUND-CAPABLE TIMER LOGIC ---
   useEffect(() => {
     if (isRunning && timerFinishTimeRef.current !== null) {
-        startTicker();
+      // Start the background ticker
+      BackgroundTimer.runBackgroundTimer(() => {
+        const now = Date.now();
+        const remaining = Math.ceil((timerFinishTimeRef.current - now) / 1000);
+
+        if (__DEV__ && remaining >= 0 && remaining <= 5) { 
+             console.log(`[TimerPage] Tick: ${remaining}s (AppState: ${AppState.currentState})`);
+        }
+
+        if (remaining <= 0) {
+          console.log("[TimerPage] Timer finished (Background-capable ticker).");
+          stopBackgroundTicker();
+          setSecondsLeft(0);
+
+          // IMPORTANT: If we are in the background, we must FIRE the notification NOW.
+          if (AppState.currentState.match(/inactive|background/)) {
+              console.log("[TimerPage] Firing immediate notification from background.");
+              Notifications.scheduleNotificationAsync({
+                  content: {
+                      title: "⏰ Timer Finished!",
+                      body: "Tap here to open the app and choose an action.",
+                      sound: true,
+                      priority: Notifications.AndroidNotificationPriority.HIGH,
+                  },
+                  trigger: null, // Immediate fire
+              });
+          }
+          
+          onTimerComplete();
+        } else {
+          // Only update React state if it actually changed to avoid unnecessary renders
+           setSecondsLeft(prev => (prev !== remaining ? remaining : prev));
+        }
+      }, 1000); // Check every 1s (saves a bit of battery over 250ms in background)
     } else {
-        stopTicker();
+        // Ensure it stops if isRunning becomes false
+        BackgroundTimer.stopBackgroundTimer();
     }
 
-    return () => stopTicker();
+    return () => {
+       BackgroundTimer.stopBackgroundTimer();
+    };
   }, [isRunning]); 
 
   // --- ACTIONS ---
@@ -343,7 +316,7 @@ export const TimerPage = ({ navigation }) => {
 
     Vibration.cancel(); 
     setTimerCompleteModalVisible(false);
-    stopTicker();
+    stopBackgroundTicker(); // Ensure clean slate
 
     const h = Number(selectedHour) || 0;
     const m = Number(selectedMinute) || 0;
@@ -384,7 +357,7 @@ export const TimerPage = ({ navigation }) => {
 
   const pauseTimer = async () => {
     console.log("[TimerPage] Pausing.");
-    stopTicker();
+    stopBackgroundTicker();
     try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch(e) {}
     await AsyncStorage.removeItem(TIMER_END_TIME_KEY);
   };
@@ -403,7 +376,7 @@ export const TimerPage = ({ navigation }) => {
 
   const cancelTimer = async () => {
     console.log("[TimerPage] Cancelling manually.");
-    stopTicker();
+    stopBackgroundTicker();
     cleanupTimerState();
     try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch(e) {}
   };
@@ -419,8 +392,12 @@ export const TimerPage = ({ navigation }) => {
   };
 
   const onTimerComplete = async () => {
+    // Final safety clear of any scheduled stuff (though we didn't schedule any this time)
     try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch(e) {}
+    
     await cleanupTimerState();
+    
+    // Only vibrate if we are actively looking at it, or just let it vibrate anyway as extra alert
     Vibration.vibrate(Platform.OS === 'android' ? [0, 500, 500, 500] : [500, 500, 500]);
     setTimerCompleteModalVisible(true);
   };
