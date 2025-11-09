@@ -335,36 +335,7 @@ export const TimerPage = ({ navigation }) => {
       AsyncStorage.setItem(TIMER_END_TIME_KEY, String(targetEndTime));
       AsyncStorage.setItem(TIMER_TOTAL_SECONDS_KEY, String(total));
 
-      // Schedule notification DELAYED, and with a FRESH trigger calculation
-      setTimeout(async () => {
-          try {
-            // Calculate a fresh trigger time based on NOW, not the old 'total'
-            // giving it a 3s buffer from THIS MOMENT to ensure it doesn't race the UI.
-            // This is a fallback for backgrounding anyway.
-            const freshNow = Date.now();
-            const remainingWhenScheduling = Math.max(1, Math.ceil((targetEndTime - freshNow) / 1000));
-            const safeTriggerSeconds = remainingWhenScheduling + 3; 
-
-            console.log(`[TimerPage] Scheduling notification for ${safeTriggerSeconds}s from now (relative).`);
-            
-            const notificationId = await Notifications.scheduleNotificationAsync({
-                content: {
-                    title: "圷 Timer Finished!",
-                    body: "Tap here to open the app and choose an action.",
-                    sound: true,
-                    priority: Notifications.AndroidNotificationPriority.HIGH,
-                },
-                trigger: {
-                    seconds: safeTriggerSeconds,
-                    repeats: false,
-                    channelId: Platform.OS === 'android' ? NOTIFICATION_CHANNEL_ID : undefined,
-                },
-            });
-            setScheduledNotificationId(notificationId);
-          } catch (err) {
-              console.error("[TimerPage] Delayed schedule failed:", err);
-          }
-      }, 1000); // Wait a full second before even trying to schedule to avoid UI jank
+      // Notification scheduling removed (now handled on completion)
 
     } catch (e) {
       console.error('[TimerPage] Error during start:', e);
@@ -435,18 +406,37 @@ export const TimerPage = ({ navigation }) => {
   };
 
   const onTimerComplete = async () => {
-    // Double check we didn't just start (less than 1s ago)
-    if (Date.now() - startTimestampRef.current < 1000) {
-         console.warn("[TimerPage] Premature completion detected, ignoring.");
-         return;
-    }
+  // Double check we didn’t just start (less than 1s ago)
+  if (Date.now() - startTimestampRef.current < 1000) {
+    console.warn("[TimerPage] Premature completion detected, ignoring.");
+    return;
+  }
 
-    console.log("[TimerPage] Timer finished in foreground.");
-    try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch(e) {}
-    await cleanupTimerState();
-    Vibration.vibrate(Platform.OS === 'android' ? [0, 500, 500, 500] : [500, 500, 500]);
-    setTimerCompleteModalVisible(true);
-  };
+  console.log("[TimerPage] Timer finished in foreground.");
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+
+    // 🔔 Schedule the notification only now that the timer truly ended
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "⏰ Timer Finished!",
+        body: "Tap here to open the app and choose an action.",
+        sound: true,
+        priority: Notifications.AndroidNotificationPriority.HIGH,
+      },
+      trigger: null, // fire immediately
+    });
+
+  } catch (e) {
+    console.error("[TimerPage] Notification scheduling failed:", e);
+  }
+
+  await cleanupTimerState();
+  Vibration.vibrate(
+    Platform.OS === 'android' ? [0, 500, 500, 500] : [500, 500, 500]
+  );
+  setTimerCompleteModalVisible(true);
+};
 
   const requestLocationPermissionsAsync = async () => {
     let { status } = await Location.requestForegroundPermissionsAsync();
