@@ -379,6 +379,8 @@ function AppContent() {
                           screenHoldEnabled={screenHoldEnabled}
                           screenHoldDuration={screenHoldDuration}
                           onNavigateToJournal={() => props.navigation.navigate('Journal')}
+                          // --- THE FIX IS HERE ---
+                          onOpenMenu={() => setMenuOpen(true)}
                         />
                       )}
                     </View>
