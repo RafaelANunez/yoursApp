@@ -69,18 +69,19 @@ const WheelPicker = ({ data, selectedValue, onSelect, label }) => {
                 animated: false,
             });
         }
-      }, 0);
+      }, 100);
       return () => clearTimeout(timeoutId);
     }
-  }, [data, selectedValue]);
+  }, []); 
 
   const handleScrollEnd = (event) => {
     const y = event.nativeEvent.contentOffset.y;
     const index = Math.round(y / ITEM_HEIGHT);
     const selected = data[Math.min(Math.max(index, 0), data.length - 1)];
-    onSelect(selected);
-
-    if (scrollViewRef.current && Math.abs(y - index * ITEM_HEIGHT) > 1) {
+    if (selected !== selectedValue) {
+        onSelect(selected);
+    }
+    if (scrollViewRef.current) {
       scrollViewRef.current.scrollTo({ y: index * ITEM_HEIGHT, animated: true });
     }
   };
@@ -116,12 +117,13 @@ const WheelPicker = ({ data, selectedValue, onSelect, label }) => {
 };
 
 // --- NOTIFICATION HANDLER SETUP ---
-// Set to TRUE so you can see it works even if the app is open.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -135,7 +137,11 @@ export const TimerPage = ({ navigation }) => {
   const [totalSeconds, setTotalSeconds] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [isLoadingDefaults, setIsLoadingDefaults] = useState(true);
+  const [isStarting, setIsStarting] = useState(false);
+  
   const intervalRef = useRef(null);
+  const timerFinishTimeRef = useRef(null);
+  const startTimestampRef = useRef(0); // NEW: Guard against immediate finish
   
   const [scheduledNotificationId, setScheduledNotificationId] = useState(null);
   const appState = useRef(AppState.currentState);
@@ -154,9 +160,9 @@ export const TimerPage = ({ navigation }) => {
         const storedDuration = await AsyncStorage.getItem(LAST_TIMER_KEY);
         if (storedDuration) {
           const { hour, minute, second } = JSON.parse(storedDuration);
-          setSelectedHour(hour);
-          setSelectedMinute(minute);
-          setSelectedSecond(second);
+          setSelectedHour(Number(hour) || 0);
+          setSelectedMinute(Number(minute) || 0);
+          setSelectedSecond(Number(second) || 0);
         }
       } catch (error) {
         console.error('Error loading last timer duration:', error);
@@ -186,20 +192,17 @@ export const TimerPage = ({ navigation }) => {
         finalStatus = status;
       }
       if (finalStatus !== 'granted') {
-        Alert.alert('Action Required', 'Please enable notifications in your device settings to ensure the timer works in the background.');
+        Alert.alert('Action Required', 'Please enable notifications.');
       }
     };
 
     setupNotifications();
 
     const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
-      // User tapped notification
+      console.log("[TimerPage] Notification tapped.");
+      stopForegroundTimer();
       setTimerCompleteModalVisible(true);
-      setSecondsLeft(0);
-      setIsRunning(false);
-      setTotalSeconds(0);
-      AsyncStorage.removeItem(TIMER_END_TIME_KEY);
-      AsyncStorage.removeItem(TIMER_TOTAL_SECONDS_KEY);
+      cleanupTimerState();
     });
 
     return () => {
@@ -217,19 +220,16 @@ export const TimerPage = ({ navigation }) => {
         if (endTimeString) {
           const endTime = parseInt(endTimeString, 10);
           const now = Date.now();
-
           if (now >= endTime) {
-            setSecondsLeft(0);
-            setIsRunning(false);
-            setTotalSeconds(0);
-            await AsyncStorage.removeItem(TIMER_END_TIME_KEY);
-            await AsyncStorage.removeItem(TIMER_TOTAL_SECONDS_KEY);
+            stopForegroundTimer();
             setTimerCompleteModalVisible(true);
+            cleanupTimerState();
           } else {
             const totalSecsString = await AsyncStorage.getItem(TIMER_TOTAL_SECONDS_KEY);
             const total = totalSecsString ? parseInt(totalSecsString, 10) : 0;
             setTotalSeconds(total);
-            setSecondsLeft(Math.round((endTime - now) / 1000));
+            timerFinishTimeRef.current = endTime;
+            setSecondsLeft(Math.max(1, Math.ceil((endTime - now) / 1000)));
             setIsRunning(true);
           }
         }
@@ -242,123 +242,186 @@ export const TimerPage = ({ navigation }) => {
     };
   }, []);
 
+  // --- HELPER: Stop & Cleanup ---
+  const stopForegroundTimer = () => {
+    setIsRunning(false);
+    if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+    }
+  };
+
+  const cleanupTimerState = async () => {
+    timerFinishTimeRef.current = null;
+    setSecondsLeft(0);
+    setTotalSeconds(0);
+    await AsyncStorage.removeItem(TIMER_END_TIME_KEY);
+    await AsyncStorage.removeItem(TIMER_TOTAL_SECONDS_KEY);
+  };
+
   // --- FOREGROUND TIMER LOGIC ---
   useEffect(() => {
-    if (isRunning && secondsLeft > 0) {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+
+    if (isRunning && timerFinishTimeRef.current !== null) {
       intervalRef.current = setInterval(() => {
-        setSecondsLeft(prev => {
-          if (prev <= 1) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-            setIsRunning(false);
-            onTimerComplete();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else if (!isRunning && intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+        const now = Date.now();
+
+        // START GUARD: Don't allow finishing within 1s of starting
+        if (now - startTimestampRef.current < 1000) return;
+
+        const remaining = Math.ceil((timerFinishTimeRef.current - now) / 1000);
+
+        if (__DEV__ && secondsLeft !== remaining && remaining >= 0 && remaining <= 5) { 
+             console.log(`[TimerPage] Tick: ${remaining}s`);
+        }
+
+        if (remaining <= 0) {
+          console.log("[TimerPage] Timer natural finish.");
+          stopForegroundTimer();
+          setSecondsLeft(0); 
+          onTimerComplete();
+        } else {
+          setSecondsLeft(prev => (prev !== remaining ? remaining : prev));
+        }
+      }, 250);
     }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [isRunning, secondsLeft]);
+
+    return () => {
+       if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [isRunning]); 
 
   // --- ACTIONS ---
   const startTimer = async () => {
-    const h = parseInt(String(selectedHour || 0), 10);
-    const m = parseInt(String(selectedMinute || 0), 10);
-    const s = parseInt(String(selectedSecond || 0), 10);
-    const total = h * 3600 + m * 60 + s;
+    if (isStarting) return;
+    setIsStarting(true);
+
+    Vibration.cancel(); 
+    setTimerCompleteModalVisible(false);
+    stopForegroundTimer();
+
+    const h = Number(selectedHour) || 0;
+    const m = Number(selectedMinute) || 0;
+    const s = Number(selectedSecond) || 0;
+    const total = (h * 3600) + (m * 60) + s;
 
     if (total <= 0) {
       Alert.alert('Invalid time', 'Please set a duration greater than 0 seconds.');
+      setIsStarting(false);
       return;
     }
 
-    await AsyncStorage.setItem(LAST_TIMER_KEY, JSON.stringify({ hour: h, minute: m, second: s }));
-    
-    const endTimeMs = Date.now() + (total * 1000);
-    await AsyncStorage.setItem(TIMER_END_TIME_KEY, String(endTimeMs));
-    await AsyncStorage.setItem(TIMER_TOTAL_SECONDS_KEY, String(total));
-
     try {
+      await Notifications.dismissAllNotificationsAsync();
       await Notifications.cancelAllScheduledNotificationsAsync();
+
+      // Small delay to let the modal fully close and state settle
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      const now = Date.now();
+      startTimestampRef.current = now; // Mark start time
+      // 500ms buffer for UI smoothness, ensures first tick isn't weird
+      const targetEndTime = now + (total * 1000) + 500; 
       
-      // Force trigger to be at least 5 seconds in future for testing reliability
-      const safeTotal = Math.max(5, total);
-      const triggerDate = new Date(Date.now() + (safeTotal * 1000));
+      console.log(`[TimerPage] START. Duration: ${total}s. Target End: ${targetEndTime}`);
 
-      const notificationId = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: "🚨 Timer Finished!",
-          body: "Tap here to open the app and choose an action.",
-          sound: true,
-          vibrate: [0, 500, 500, 500],
-          priority: Notifications.AndroidNotificationPriority.HIGH,
-        },
-        trigger: { 
-            date: triggerDate,
-            channelId: Platform.OS === 'android' ? NOTIFICATION_CHANNEL_ID : undefined,
-        },
-      });
-      setScheduledNotificationId(notificationId);
+      timerFinishTimeRef.current = targetEndTime;
+      setTotalSeconds(total);
+      setSecondsLeft(total);
+      setIsRunning(true);
+
+      AsyncStorage.setItem(LAST_TIMER_KEY, JSON.stringify({ hour: h, minute: m, second: s }));
+      AsyncStorage.setItem(TIMER_END_TIME_KEY, String(targetEndTime));
+      AsyncStorage.setItem(TIMER_TOTAL_SECONDS_KEY, String(total));
+
+      // Schedule notification DELAYED, and with a FRESH trigger calculation
+      setTimeout(async () => {
+          try {
+            // Calculate a fresh trigger time based on NOW, not the old 'total'
+            // giving it a 3s buffer from THIS MOMENT to ensure it doesn't race the UI.
+            // This is a fallback for backgrounding anyway.
+            const freshNow = Date.now();
+            const remainingWhenScheduling = Math.max(1, Math.ceil((targetEndTime - freshNow) / 1000));
+            const safeTriggerSeconds = remainingWhenScheduling + 3; 
+
+            console.log(`[TimerPage] Scheduling notification for ${safeTriggerSeconds}s from now (relative).`);
+            
+            const notificationId = await Notifications.scheduleNotificationAsync({
+                content: {
+                    title: "圷 Timer Finished!",
+                    body: "Tap here to open the app and choose an action.",
+                    sound: true,
+                    priority: Notifications.AndroidNotificationPriority.HIGH,
+                },
+                trigger: {
+                    seconds: safeTriggerSeconds,
+                    repeats: false,
+                    channelId: Platform.OS === 'android' ? NOTIFICATION_CHANNEL_ID : undefined,
+                },
+            });
+            setScheduledNotificationId(notificationId);
+          } catch (err) {
+              console.error("[TimerPage] Delayed schedule failed:", err);
+          }
+      }, 1000); // Wait a full second before even trying to schedule to avoid UI jank
+
     } catch (e) {
-      console.error('Error scheduling notification:', e);
-      Alert.alert("Error", "Failed to schedule background alert. Please check permissions.");
+      console.error('[TimerPage] Error during start:', e);
+      setIsRunning(false);
+    } finally {
+        setIsStarting(false);
     }
-
-    setTotalSeconds(total);
-    setSecondsLeft(total);
-    setIsRunning(true);
   };
 
   const pauseTimer = async () => {
+    console.log("[TimerPage] Pausing.");
+    stopForegroundTimer();
     try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch(e) {}
     setScheduledNotificationId(null);
     await AsyncStorage.removeItem(TIMER_END_TIME_KEY);
     await AsyncStorage.removeItem(TIMER_TOTAL_SECONDS_KEY);
-    setIsRunning(false);
   };
 
   const resumeTimer = async () => {
     if (secondsLeft > 0) {
-      const endTimeMs = Date.now() + (secondsLeft * 1000);
-      await AsyncStorage.setItem(TIMER_END_TIME_KEY, String(endTimeMs));
-      await AsyncStorage.setItem(TIMER_TOTAL_SECONDS_KEY, String(totalSeconds));
+        console.log(`[TimerPage] Resuming with ${secondsLeft}s left.`);
+        const now = Date.now();
+        startTimestampRef.current = now;
+        const targetEndTime = now + (secondsLeft * 1000) + 500;
+        
+        timerFinishTimeRef.current = targetEndTime;
+        setIsRunning(true);
 
-      try {
-        await Notifications.cancelAllScheduledNotificationsAsync();
-        const safeSeconds = Math.max(5, secondsLeft);
-        const triggerDate = new Date(Date.now() + (safeSeconds * 1000));
-
-        const notificationId = await Notifications.scheduleNotificationAsync({
-          content: {
-            title: "🚨 Timer Finished!",
-            body: "Tap here to open the app and choose an action.",
-            sound: true,
-            priority: Notifications.AndroidNotificationPriority.HIGH,
-          },
-          trigger: { 
-             date: triggerDate,
-             channelId: Platform.OS === 'android' ? NOTIFICATION_CHANNEL_ID : undefined,
-          },
-        });
-        setScheduledNotificationId(notificationId);
-      } catch (e) { console.error(e); }
-
-      setIsRunning(true);
+        AsyncStorage.setItem(TIMER_END_TIME_KEY, String(targetEndTime));
+        
+        setTimeout(async () => {
+             try {
+                await Notifications.cancelAllScheduledNotificationsAsync();
+                await Notifications.scheduleNotificationAsync({
+                    content: {
+                        title: "圷 Timer Finished!",
+                        body: "Tap here to open the app and choose an action.",
+                        sound: true,
+                        priority: Notifications.AndroidNotificationPriority.HIGH,
+                    },
+                    trigger: {
+                        seconds: secondsLeft + 3,
+                        repeats: false,
+                        channelId: Platform.OS === 'android' ? NOTIFICATION_CHANNEL_ID : undefined,
+                    },
+                });
+             } catch (e) { console.error(e); }
+        }, 500);
     }
   };
 
   const cancelTimer = async () => {
+    console.log("[TimerPage] Cancelling manually.");
+    stopForegroundTimer();
+    cleanupTimerState();
     try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch(e) {}
     setScheduledNotificationId(null);
-    await AsyncStorage.removeItem(TIMER_END_TIME_KEY);
-    await AsyncStorage.removeItem(TIMER_TOTAL_SECONDS_KEY);
-    setIsRunning(false);
-    setSecondsLeft(0);
-    setTotalSeconds(0);
   };
 
   const setPreset = (hours = 0, minutes = 0, seconds = 0) => {
@@ -372,10 +435,15 @@ export const TimerPage = ({ navigation }) => {
   };
 
   const onTimerComplete = async () => {
-    // Timer finished IN APP. Cancel background notification just in case.
+    // Double check we didn't just start (less than 1s ago)
+    if (Date.now() - startTimestampRef.current < 1000) {
+         console.warn("[TimerPage] Premature completion detected, ignoring.");
+         return;
+    }
+
+    console.log("[TimerPage] Timer finished in foreground.");
     try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch(e) {}
-    await AsyncStorage.removeItem(TIMER_END_TIME_KEY);
-    await AsyncStorage.removeItem(TIMER_TOTAL_SECONDS_KEY);
+    await cleanupTimerState();
     Vibration.vibrate(Platform.OS === 'android' ? [0, 500, 500, 500] : [500, 500, 500]);
     setTimerCompleteModalVisible(true);
   };
@@ -458,15 +526,16 @@ export const TimerPage = ({ navigation }) => {
           <TouchableOpacity style={styles.presetButton} onPress={() => setPreset(0, 45, 0)}><Text style={styles.presetButtonText}>45:00</Text></TouchableOpacity>
           <TouchableOpacity style={styles.presetButton} onPress={() => setPreset(1, 0, 0)}><Text style={styles.presetButtonText}>1:00:00</Text></TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.controlButton} onPress={startTimer}>
-          <Svg width="32" height="32" viewBox="0 0 24 24" fill={backgroundColor}><Path d="M8 5v14l11-7z" /></Svg>
+        <TouchableOpacity style={[styles.controlButton, isStarting && { opacity: 0.5 }]} onPress={startTimer} disabled={isStarting}>
+          {isStarting ? <ActivityIndicator color={backgroundColor} /> : <Svg width="32" height="32" viewBox="0 0 24 24" fill={backgroundColor}><Path d="M8 5v14l11-7z" /></Svg>}
         </TouchableOpacity>
       </>
     );
   };
 
   const renderRunning = () => {
-    const endTime = new Date(Date.now() + secondsLeft * 1000);
+    const targetTime = timerFinishTimeRef.current || (Date.now() + secondsLeft * 1000);
+    const endTime = new Date(targetTime);
     const endTimeString = endTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
     return (
       <>
@@ -477,12 +546,22 @@ export const TimerPage = ({ navigation }) => {
           </Svg>
           <View style={styles.timerTextContainer}>
             <Text style={styles.timerDisplayRunning}>{formatTime(secondsLeft)}</Text>
-            <Text style={styles.endTimeText}>🏁 {endTimeString}</Text>
+            <Text style={styles.endTimeText}>潤 {endTimeString}</Text>
           </View>
         </View>
         <View style={styles.presetContainer}>
-          <TouchableOpacity style={styles.presetButton} onPress={() => setSecondsLeft(prev => Math.max(0, prev + 600))}><Text style={styles.presetButtonText}>+10 min</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.presetButton} onPress={() => setSecondsLeft(prev => Math.max(0, prev + 300))}><Text style={styles.presetButtonText}>+5 min</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.presetButton} onPress={() => {
+             const newSecondsLeft = secondsLeft + 600;
+             setSecondsLeft(newSecondsLeft);
+             setTotalSeconds(prev => prev + 600);
+             resumeTimer(); 
+          }}><Text style={styles.presetButtonText}>+10 min</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.presetButton} onPress={() => {
+             const newSecondsLeft = secondsLeft + 300;
+             setSecondsLeft(newSecondsLeft);
+             setTotalSeconds(prev => prev + 300);
+             resumeTimer();
+          }}><Text style={styles.presetButtonText}>+5 min</Text></TouchableOpacity>
           <TouchableOpacity style={styles.presetButton} onPress={cancelTimer}><Text style={styles.presetButtonText}>Cancel</Text></TouchableOpacity>
         </View>
         <TouchableOpacity style={styles.controlButton} onPress={pauseTimer}>
@@ -493,7 +572,8 @@ export const TimerPage = ({ navigation }) => {
   };
 
   const renderPaused = () => {
-     const endTime = new Date(Date.now() + secondsLeft * 1000);
+     const targetTime = Date.now() + secondsLeft * 1000;
+     const endTime = new Date(targetTime);
      const endTimeString = endTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
      return (
        <>
@@ -504,7 +584,7 @@ export const TimerPage = ({ navigation }) => {
            </Svg>
            <View style={styles.timerTextContainer}>
              <Text style={[styles.timerDisplayRunning, { color: progressPausedColor }]}>{formatTime(secondsLeft)}</Text>
-             <Text style={[styles.endTimeText, { color: progressPausedColor }]}>🏁 {endTimeString} (Paused)</Text>
+             <Text style={[styles.endTimeText, { color: progressPausedColor }]}>潤 {endTimeString} (Paused)</Text>
            </View>
          </View>
          <View style={styles.presetContainer}>
@@ -523,7 +603,7 @@ export const TimerPage = ({ navigation }) => {
       <View style={styles.pageContainer}>
         {secondsLeft === 0 && !isRunning ? renderSetup() : (isRunning ? renderRunning() : renderPaused())}
       </View>
-      <Modal animationType="slide" transparent={true} visible={timerCompleteModalVisible} onRequestClose={() => { setTimerCompleteModalVisible(false); cancelTimer(); }}>
+      <Modal key={timerCompleteModalVisible ? "visible" : "hidden"} animationType="slide" transparent={true} visible={timerCompleteModalVisible} onRequestClose={() => { setTimerCompleteModalVisible(false); cancelTimer(); }}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalContainer}>
             <Text style={styles.modalTitle}>Timer Finished!</Text>
