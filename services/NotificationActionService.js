@@ -1,8 +1,9 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-// Define the category identifier
+// Category Identifiers
 const SAFETY_CATEGORY = 'SAFETY_CONTROL_BANNER';
+export const TIMER_EXPIRED_CATEGORY = 'TIMER_EXPIRED'; // NEW: Specific category for timer end
 
 // Action Identifiers
 export const ACTIONS = {
@@ -11,29 +12,27 @@ export const ACTIONS = {
   TIMER: 'TRIGGER_TIMER',
 };
 
-// Configure how notifications behave when received while the app is foregrounded
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
     shouldShowList: true,
-    shouldPlaySound: false,
+    shouldPlaySound: true, // ensure sound plays for timer
     shouldSetBadge: false,
   }),
 });
 
 export async function registerSafetyNotificationActions() {
+  // Register Action Category
   await Notifications.setNotificationCategoryAsync(SAFETY_CATEGORY, [
     {
       identifier: ACTIONS.FAKE_CALL,
       buttonTitle: '📞 Fake Call',
-      // opensAppToForeground ensures the app wakes up before we try to execute JS
-      options: { opensAppToForeground: true }, 
+      options: { opensAppToForeground: true },
     },
     {
       identifier: ACTIONS.PANIC,
       buttonTitle: '🚨 Panic',
-      // keeping this true for now to ensure standard panic screen loads reliably
-      options: { opensAppToForeground: true }, 
+      options: { opensAppToForeground: true },
     },
     {
       identifier: ACTIONS.TIMER,
@@ -41,6 +40,9 @@ export async function registerSafetyNotificationActions() {
       options: { opensAppToForeground: true },
     },
   ]);
+
+  // NEW: Register Timer Expired Category (no buttons needed, just for routing)
+  await Notifications.setNotificationCategoryAsync(TIMER_EXPIRED_CATEGORY, []);
 }
 
 export async function showSafetyBanner() {
@@ -59,24 +61,55 @@ export async function showSafetyBanner() {
       sticky: Platform.OS === 'android',
       color: '#FF0000',
       priority: Notifications.AndroidNotificationPriority.MAX,
+      sound: false, // Silent for the banner itself
     },
     trigger: null,
   });
 }
 
 export async function hideSafetyBanner() {
-  await Notifications.dismissAllNotificationsAsync();
+  // We can use generic dismiss here as we WANT to kill the banner
+  // But to be safe, let's only kill notifications with our category if we want to be precise.
+  // For now, standard dismiss is okay for "hiding" it specifically if we knew its ID,
+  // but since we don't track the ID, we might have to loop.
+  // Actually, dismissAll is fine if the user explicitly requested "Turn off banner".
+  // If you want to ONLY KILL THE BANNER, you'd need to track its ID when scheduling.
+  // For simplicity, this remains as is for user-initiated "off" toggle.
+   await Notifications.dismissAllNotificationsAsync();
 }
 
 /**
- * UPDATED LISTENER: accepts an object of specific callbacks
+ * NEW: Safely dismisses notifications EXCEPT the safety banner.
+ * Use this instead of Notifications.dismissAllNotificationsAsync() in other parts of your app.
  */
+export async function dismissNonSafetyNotifications() {
+    const displayed = await Notifications.getPresentedNotificationsAsync();
+    for (const notification of displayed) {
+        if (notification.request.content.categoryIdentifier !== SAFETY_CATEGORY) {
+            await Notifications.dismissNotificationAsync(notification.request.identifier);
+        }
+    }
+}
+
 export function addNotificationActionListener(callbacks) {
   const { onFakeCall, onPanic, onTimer, navigation } = callbacks;
 
   const subscription = Notifications.addNotificationResponseReceivedListener(response => {
     const actionId = response.actionIdentifier;
+    // NEW: Check the category of the notification that was tapped
+    const categoryId = response.notification.request.content.categoryIdentifier;
 
+    // 1. PRIORITY CHECK: Was this the Timer Expiration notification?
+    if (categoryId === TIMER_EXPIRED_CATEGORY) {
+        if (onTimer) {
+             onTimer();
+        } else if (navigation && navigation.isReady()) {
+             navigation.navigate('Timer');
+        }
+        return; // Stop processing, we found our match
+    }
+
+    // 2. Standard Action Buttons from Banner
     switch (actionId) {
       case ACTIONS.FAKE_CALL:
         if (onFakeCall) onFakeCall();
@@ -91,6 +124,7 @@ export function addNotificationActionListener(callbacks) {
              navigation.navigate('Timer');
         }
         break;
+      // 3. Default body tap (if not handled by priority check above)
       case Notifications.DEFAULT_ACTION_IDENTIFIER:
         if (navigation && navigation.isReady()) {
              navigation.navigate('Home');
