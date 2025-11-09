@@ -7,9 +7,9 @@ import {
   StatusBar,
   TouchableOpacity,
   Text,
-  Alert, // Added for save function
+  Alert,
 } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { VolumeManager } from 'react-native-volume-manager';
@@ -18,7 +18,6 @@ import { AppHeader } from './components/AppHeader';
 import { SideMenu } from './components/SideMenu';
 
 // --- CONTEXT PROVIDERS ---
-// Make sure AuthProvider is at the top
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { JournalProvider } from './context/JournalContext';
 import { EmergencyContactsProvider } from './context/EmergencyContactsContext';
@@ -42,7 +41,7 @@ import DiscreetModeSettingsPage from './screens/DiscreetModeSettingsPage';
 import SudokuScreen from './screens/SudokuScreen';
 import FakeCallSettingsPage from './screens/FakeCallSettingsPage';
 import BackupAndRestorePage from './screens/BackupAndRestorePage';
-import UserProfileSettingsPage from './screens/UserProfileSettingsPage'; // IMPORTED
+import UserProfileSettingsPage from './screens/UserProfileSettingsPage';
 
 // Journey Sharing Screens
 import JourneySharingPageV2 from './components/JourneySharing/JourneySharingPageV2';
@@ -50,14 +49,16 @@ import TrackAFriendPage from './components/JourneySharing/TrackAFriendPage';
 import TrackingDetailPage from './components/JourneySharing/TrackingDetailPage';
 import LocationHistoryPage from './components/LocationHistoryPage';
 
+// --- NOTIFICATION SERVICE ---
+import { 
+  registerSafetyNotificationActions, 
+  addNotificationActionListener 
+} from './services/NotificationActionService';
+
 const Stack = createStackNavigator();
 
-// --- Main App Entry Point ---
-// This component now just sets up the providers.
-// The AuthProvider wraps everything that needs to know about login state.
 export default function App() {
   return (
-    // --- AuthProvider MUST wrap all other providers ---
     <AuthProvider>
       <AutofillProvider>
         <EmergencyContactsProvider>
@@ -70,11 +71,9 @@ export default function App() {
   );
 }
 
-// --- New component to hold all logic that needs access to AuthContext ---
-// This contains all the state, effects, and navigation logic from the original App.js
 function AppContent() {
-  // --- GET AUTH STATE ---
   const { user, isLoggedIn, isLoading } = useAuth();
+  const navigationRef = useNavigationContainerRef();
 
   // --- App State ---
   const [isMenuOpen, setMenuOpen] = useState(false);
@@ -88,14 +87,13 @@ function AppContent() {
   const volumeHoldTimeout = useRef(null);
   const lastVolume = useRef(null);
 
-  // --- Lifted State for Fake Call Settings (with defaults) ---
+  // --- Lifted State for Fake Call Settings ---
   const [callerName, setCallerName] = useState('Tech Maniac');
   const [screenHoldEnabled, setScreenHoldEnabled] = useState(true);
   const [volumeHoldEnabled, setVolumeHoldEnabled] = useState(true);
-  const [screenHoldDuration, setScreenHoldDuration] = useState(10); // in seconds
-  const [volumeHoldDuration, setVolumeHoldDuration] = useState(5); // in seconds
+  const [screenHoldDuration, setScreenHoldDuration] = useState(10);
+  const [volumeHoldDuration, setVolumeHoldDuration] = useState(5);
 
-  // --- Refs to hold the latest state for the volume listener ---
   const settingsRef = useRef({
     isFakeCallActive,
     volumeHoldEnabled,
@@ -110,30 +108,66 @@ function AppContent() {
     };
   }, [isFakeCallActive, volumeHoldEnabled, volumeHoldDuration]);
 
-  // --- MODIFIED: Load/Reset settings based on user login status ---
+  // --- IMPROVED NOTIFICATION LISTENER SETUP ---
+  useEffect(() => {
+    registerSafetyNotificationActions();
+
+    const subscription = addNotificationActionListener({
+        // Callback for Fake Call
+        onFakeCall: () => {
+           if (navigationRef.isReady()) {
+               // 1. Force navigation to Home first. 
+               // This ensures the component that holds the FakeCallScreen is actually mounted.
+               navigationRef.navigate('Home');
+               
+               // 2. Small delay to allow navigation to complete before setting state
+               setTimeout(() => {
+                   setFakeCallActive(true);
+               }, 100);
+           }
+        },
+        // Callback for Panic
+        onPanic: () => {
+            if (navigationRef.isReady()) {
+                navigationRef.navigate('Panic');
+            }
+        },
+        // Callback for Timer
+        onTimer: () => {
+             if (navigationRef.isReady()) {
+                navigationRef.navigate('Timer');
+            }
+        },
+        // Pass ref for default actions
+        navigation: navigationRef
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  // --- Load/Reset settings based on user login status ---
   useEffect(() => {
     if (user?.email) {
-      // User is logged in, load their settings
       loadFakeCallSettings(user.email);
       checkDiscreetModeSettings(user.email);
     } else {
-      // User is logged out, reset settings to default
       setCallerName('Tech Maniac');
       setScreenHoldEnabled(true);
       setVolumeHoldEnabled(true);
       setScreenHoldDuration(10);
       setVolumeHoldDuration(5);
-      setShowSudoku(false); // Ensure Sudoku is off on logout
+      setShowSudoku(false);
       setTwoFingerTriggerEnabled(false);
       setIsEmergencyMode(false);
     }
-  }, [user]); // Re-run this effect when the user logs in or out
+  }, [user]);
 
-  // --- Volume listener effect (no change needed) ---
+  // --- Volume listener effect ---
   useEffect(() => {
     VolumeManager.enable(true);
     const volumeListener = VolumeManager.addVolumeListener(result => {
-      // ... (volume listener logic remains the same)
       const {
         isFakeCallActive: isFakeCallActiveNow,
         volumeHoldEnabled: isVolumeHoldEnabledNow,
@@ -143,7 +177,6 @@ function AppContent() {
       if (!isVolumeHoldEnabledNow || isFakeCallActiveNow) return;
 
       const currentVolume = result.volume;
-
       const isVolumeUpPress =
         (lastVolume.current !== null && currentVolume > lastVolume.current) ||
         (currentVolume === 1.0 && lastVolume.current === 1.0);
@@ -171,12 +204,10 @@ function AppContent() {
         clearTimeout(volumeHoldTimeout.current);
       }
     };
-  }, []); // Empty dependency array is correct here.
+  }, []);
 
-  // --- MODIFIED: Load functions now take user's email ---
   const loadFakeCallSettings = async (email) => {
     try {
-      // Keys are now prefixed with the user's email
       const keys = [
         `@${email}_fake_call_caller_name`,
         `@${email}_fake_call_screen_hold_enabled`,
@@ -196,11 +227,8 @@ function AppContent() {
     }
   };
 
-  // --- MODIFIED: Load functions now take user's email ---
-  // THIS FUNCTION CONTAINS THE LATEST FIX
   const checkDiscreetModeSettings = async (email) => {
     try {
-      // Keys are now prefixed with the user's email
       const keys = [
         `@${email}_discreet_mode_enabled`,
         `@${email}_sudoku_screen_enabled`,
@@ -212,28 +240,20 @@ function AppContent() {
         AsyncStorage.getItem(keys[2]),
       ]);
 
-      // --- START OF FIX ---
-      // If both settings are enabled, show Sudoku
       if (discreetMode === 'true' && sudokuScreen === 'true') {
         setShowSudoku(true);
       } else {
-        // ELSE, explicitly set it to false. This is what was missing.
         setShowSudoku(false); 
       }
-      // --- END OF FIX ---
-
       setTwoFingerTriggerEnabled(twoFinger === 'true');
     } catch (error) {
       console.error('Error checking discreet mode settings:', error);
-      // Failsafe: if settings fail to load, default to not showing Sudoku
       setShowSudoku(false);
     }
   };
   
-  // --- ADDED: Save function to pass to FakeCallSettingsPage ---
   const onSaveFakeCallSettings = async (email, newSettings) => {
      try {
-        // Save settings with user-specific keys
         await AsyncStorage.multiSet([
             [`@${email}_fake_call_caller_name`, newSettings.callerName],
             [`@${email}_fake_call_screen_hold_enabled`, String(newSettings.screenHoldEnabled)],
@@ -241,7 +261,6 @@ function AppContent() {
             [`@${email}_fake_call_screen_hold_duration`, String(newSettings.screenHoldDuration)],
             [`@${email}_fake_call_volume_hold_duration`, String(newSettings.volumeHoldDuration)],
         ]);
-        // Update local state in App.js
         setCallerName(newSettings.callerName);
         setScreenHoldEnabled(newSettings.screenHoldEnabled);
         setVolumeHoldEnabled(newSettings.volumeHoldEnabled);
@@ -253,7 +272,6 @@ function AppContent() {
      }
   };
 
-  // --- (All other helper functions remain the same) ---
   const handleBypassSuccess = () => {
     setShowSudoku(false);
     setIsEmergencyMode(false);
@@ -314,7 +332,6 @@ function AppContent() {
     setShowSudoku(true);
   };
 
-  // --- MODIFIED: Show loading screen while AuthContext is busy ---
   if (isLoading) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
@@ -324,21 +341,18 @@ function AppContent() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <View
         style={styles.touchContainer}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
       >
-        {/* --- MODIFIED: Navigator logic --- */}
         <Stack.Navigator
-          // Set the initial route based on login state
           initialRouteName={isLoggedIn ? 'Home' : 'Login'}
           screenOptions={{ headerShown: false }}
         >
           {isLoggedIn ? (
-            // --- User is Logged IN: Show Main App Screens ---
             <>
               <Stack.Screen name="Home">
                 {props => (
@@ -369,7 +383,6 @@ function AppContent() {
                       )}
                     </View>
                     
-                    {/* --- THIS IS THE MENU THAT WAS HIDDEN --- */}
                     {!isFakeCallActive && !showSudoku && (
                       <View style={styles.bottomNav}>
                         <TouchableOpacity onPress={() => props.navigation.navigate('Journal')} style={styles.navButton}>
@@ -403,19 +416,16 @@ function AppContent() {
                 )}
               </Stack.Screen>
 
-              {/* Core Screens */}
               <Stack.Screen name="Journal" component={JournalPage} />
               <Stack.Screen name="Panic" component={PanicPage} />
               <Stack.Screen name="Timer" component={TimerPage} />
               <Stack.Screen name="Settings" component={SettingsPage} />
               <Stack.Screen name="Contacts" component={ContactsPage} />
               
-              {/* --- MODIFIED: FakeCallSettings screen --- */}
               <Stack.Screen name="FakeCallSettings">
                 {props => (
                   <FakeCallSettingsPage
-                    {...props} // This passes 'navigation'
-                    // Pass current settings down
+                    {...props}
                     settings={{
                       callerName,
                       screenHoldEnabled,
@@ -423,7 +433,6 @@ function AppContent() {
                       screenHoldDuration,
                       volumeHoldDuration,
                     }}
-                    // --- MODIFIED: Provide a callback to save settings ---
                     onSave={newSettings => {
                       if (user?.email) {
                         onSaveFakeCallSettings(user.email, newSettings);
@@ -435,18 +444,14 @@ function AppContent() {
               
               <Stack.Screen name="BackupAndRestore" component={BackupAndRestorePage} />
               <Stack.Screen name="DiscreetMode" component={DiscreetModeSettingsPage} />
-              
-              {/* --- ADDED: User Profile Screen --- */}
               <Stack.Screen name="UserProfileSettings" component={UserProfileSettingsPage} />
 
-              {/* Journey Sharing Screens */}
               <Stack.Screen name="JourneySharing" component={JourneySharingPageV2} />
               <Stack.Screen name="TrackAFriend" component={TrackAFriendPage} />
               <Stack.Screen name="TrackingDetail" component={TrackingDetailPage} />
               <Stack.Screen name="LocationHistory" component={LocationHistoryPage} />
             </>
           ) : (
-            // --- User is Logged OUT: Show Auth Screens ---
             <>
               <Stack.Screen name="Login" component={LoginScreen} />
               <Stack.Screen name="Signup" component={SignupScreen} />

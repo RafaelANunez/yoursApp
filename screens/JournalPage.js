@@ -1,11 +1,20 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, SectionList, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import {
+  View,
+  Text,
+  SectionList,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+  Image // Added for attachments
+} from 'react-native';
 import { useJournal } from '../context/JournalContext';
 import { PageHeader } from '../components/PageHeader';
 import { JournalTemplateModal } from '../components/JournalTemplateModal';
 import { JournalEntryForm } from '../components/JournalEntryForm';
 import { IncidentReportForm } from '../components/IncidentReportForm';
 import { JournalIcon, EditIcon, DeleteIcon } from '../components/Icons';
+import { Video, Audio } from 'expo-av'; // Added for video/audio playback
 
 // Use { navigation } from props instead of { onBack }
 export const JournalPage = ({ navigation }) => {
@@ -15,6 +24,19 @@ export const JournalPage = ({ navigation }) => {
   const [templateModalVisible, setTemplateModalVisible] = useState(false);
   const [editingEntry, setEditingEntry] = useState(null);
   const [templateData, setTemplateData] = useState(null);
+  
+  // --- New State for Expanded Item ---
+  const [expandedEntryId, setExpandedEntryId] = useState(null);
+  
+  // --- Refs and Effects for Audio Playback ---
+  const soundRef = useRef(new Audio.Sound());
+
+  useEffect(() => {
+    // Unload the sound object when the component unmounts
+    return () => {
+      soundRef.current.unloadAsync();
+    };
+  }, []);
 
   const groupedEntries = useMemo(() => {
     if (isLoading || entries.length === 0) return [];
@@ -128,6 +150,23 @@ export const JournalPage = ({ navigation }) => {
       return colors[severity] || 'white';
   }
 
+  // --- New Function to Toggle Expanded State ---
+  const handleToggleExpand = (itemId) => {
+    setExpandedEntryId(prevId => (prevId === itemId ? null : itemId));
+  };
+
+  // --- New Function to Play Audio ---
+  const playSound = async (uri) => {
+    try {
+      await soundRef.current.unloadAsync(); // Unload previous sound
+      await soundRef.current.loadAsync({ uri });
+      await soundRef.current.playAsync();
+    } catch (error) {
+      console.error("Failed to play sound", error);
+      Alert.alert("Error", "Could not play audio file.");
+    }
+  };
+
   if (isLoading) {
     return (
       <View style={styles.fullPage}>
@@ -140,8 +179,17 @@ export const JournalPage = ({ navigation }) => {
     );
   }
 
-  const renderJournalItem = ({ item }) => (
-      <View style={[styles.journalItem, {backgroundColor: getSeverityColor(item.severity)}]}>
+  const renderJournalItem = ({ item }) => {
+    // --- Check if item is expanded ---
+    const isExpanded = item.id === expandedEntryId;
+
+    return (
+      // --- Made entire item tappable ---
+      <TouchableOpacity
+        style={[styles.journalItem, {backgroundColor: getSeverityColor(item.severity)}]}
+        onPress={() => handleToggleExpand(item.id)}
+        activeOpacity={0.7}
+      >
         <View style={styles.journalItemContent}>
           <Text style={styles.journalItemTitle}>{item.title}</Text>
           <Text style={styles.journalItemDate}>
@@ -152,29 +200,68 @@ export const JournalPage = ({ navigation }) => {
                 <Text style={styles.incidentDetail}><Text style={{fontWeight: 'bold'}}>Person: </Text>{item.personName} ({item.relationship})</Text>
                 <Text style={styles.incidentDetail}><Text style={{fontWeight: 'bold'}}>Location: </Text>{item.location}</Text>
                 <Text style={styles.incidentDetail}><Text style={{fontWeight: 'bold'}}>Incident: </Text>{item.incidentType}</Text>
-                <Text style={styles.journalItemNotes} numberOfLines={3}>{item.description}</Text>
+                {/* --- Expandable description --- */}
+                <Text style={styles.journalItemNotes} numberOfLines={isExpanded ? undefined : 3}>{item.description}</Text>
               </>
            ) : (
-              <Text style={styles.journalItemNotes} numberOfLines={3}>{item.notes}</Text>
+              // --- Expandable notes ---
+              <Text style={styles.journalItemNotes} numberOfLines={isExpanded ? undefined : 3}>{item.notes}</Text>
            )}
+
+           {/* --- New Block: Render Attachments if Expanded --- */}
+           {isExpanded && item.attachments && (
+             <View style={styles.attachmentContainer}>
+               {item.attachments.map((att, index) => {
+                 if (att.type === 'image') {
+                   return (
+                     <Image key={index} source={{ uri: att.uri }} style={styles.attachmentImage} resizeMode="cover" />
+                   );
+                 }
+                 if (att.type === 'video') {
+                   return (
+                     <Video
+                       key={index}
+                       source={{ uri: att.uri }}
+                       style={styles.attachmentVideo}
+                       useNativeControls
+                       resizeMode="contain"
+                     />
+                   );
+                 }
+                 if (att.type === 'audio') {
+                   return (
+                     <TouchableOpacity key={index} style={styles.audioButton} onPress={() => playSound(att.uri)}>
+                       <Text style={styles.audioButtonText}>Play Audio Recording</Text>
+                     </TouchableOpacity>
+                   );
+                 }
+                 return null;
+               })}
+             </View>
+           )}
+           {/* --- End Attachments --- */}
 
         </View>
         <View style={styles.journalActions}>
           <TouchableOpacity
             style={styles.actionButton}
+            // Stop press from bubbling up to the expand toggle
+            onPressIn={(e) => e.stopPropagation()}
             onPress={() => handleEditEntry(item)}
           >
             <EditIcon />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionButton}
+            onPressIn={(e) => e.stopPropagation()}
             onPress={() => handleDeleteEntry(item)}
           >
             <DeleteIcon />
           </TouchableOpacity>
         </View>
-      </View>
-  )
+      </TouchableOpacity>
+    )
+  }
 
   return (
     <View style={styles.fullPage}>
@@ -199,6 +286,8 @@ export const JournalPage = ({ navigation }) => {
                 <Text style={styles.sectionHeader}>{title}</Text>
             )}
             showsVerticalScrollIndicator={false}
+            // --- Add this to make sure expanded item doesn't get clipped ---
+            extraData={expandedEntryId}
           />
         )}
       </View>
@@ -333,4 +422,33 @@ const styles = StyleSheet.create({
         fontSize: 30,
         lineHeight: 34,
       },
+    // --- New Styles for Attachments ---
+    attachmentContainer: {
+      marginTop: 12,
+    },
+    attachmentImage: {
+      width: '100%',
+      height: 200,
+      borderRadius: 8,
+      marginBottom: 8,
+    },
+    attachmentVideo: {
+      width: '100%',
+      height: 200,
+      borderRadius: 8,
+      marginBottom: 8,
+      backgroundColor: '#000', // Video background
+    },
+    audioButton: {
+      backgroundColor: '#F472B6',
+      padding: 12,
+      borderRadius: 8,
+      alignItems: 'center',
+      marginTop: 8,
+    },
+    audioButtonText: {
+      color: 'white',
+      fontWeight: 'bold',
+      fontSize: 14,
+    },
 });
