@@ -24,6 +24,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 
+// --- SAFE IMPORT: Background Timer ---
+// Sometimes native modules return null in Expo Go, this prevents immediate crashes on import
+let BackgroundTimer;
+try {
+  BackgroundTimer = require('react-native-background-timer').default;
+} catch (e) {
+  console.warn("[TimerPage] BackgroundTimer package not found or failed to load.");
+}
+
 // --- Constants ---
 const ITEM_HEIGHT = 50;
 const VISIBLE_ITEMS = 3;
@@ -141,9 +150,6 @@ export const TimerPage = ({ navigation }) => {
   
   const intervalRef = useRef(null);
   const timerFinishTimeRef = useRef(null);
-  const startTimestampRef = useRef(0); // NEW: Guard against immediate finish
-  
-  const [scheduledNotificationId, setScheduledNotificationId] = useState(null);
   const appState = useRef(AppState.currentState);
 
   const [timerCompleteModalVisible, setTimerCompleteModalVisible] = useState(false);
@@ -177,11 +183,13 @@ export const TimerPage = ({ navigation }) => {
   useEffect(() => {
     const setupNotifications = async () => {
       if (Platform.OS === 'android') {
+        await Notifications.deleteNotificationChannelAsync(NOTIFICATION_CHANNEL_ID);
         await Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNEL_ID, {
           name: 'Safety Timer',
           importance: Notifications.AndroidImportance.HIGH,
           vibrationPattern: [0, 500, 500, 500],
           lightColor: mainColor,
+          sound: 'default',
         });
       }
 
@@ -200,9 +208,7 @@ export const TimerPage = ({ navigation }) => {
 
     const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
       console.log("[TimerPage] Notification tapped.");
-      stopForegroundTimer();
       setTimerCompleteModalVisible(true);
-      cleanupTimerState();
     });
 
     return () => {
@@ -213,24 +219,23 @@ export const TimerPage = ({ navigation }) => {
   }, []);
 
   // --- APP STATE HANDLING ---
+  // Even with BackgroundTimer, we keep this as a backup for UI sync when returning.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async nextAppState => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+        console.log("[TimerPage] App foregrounded. Syncing UI.");
         const endTimeString = await AsyncStorage.getItem(TIMER_END_TIME_KEY);
         if (endTimeString) {
           const endTime = parseInt(endTimeString, 10);
           const now = Date.now();
           if (now >= endTime) {
-            stopForegroundTimer();
-            setTimerCompleteModalVisible(true);
-            cleanupTimerState();
+             if (!timerCompleteModalVisible) {
+                 console.log("[TimerPage] Timer finished while killed/suspended (Backup check).");
+                 stopTicker();
+                 onTimerComplete();
+             }
           } else {
-            const totalSecsString = await AsyncStorage.getItem(TIMER_TOTAL_SECONDS_KEY);
-            const total = totalSecsString ? parseInt(totalSecsString, 10) : 0;
-            setTotalSeconds(total);
-            timerFinishTimeRef.current = endTime;
-            setSecondsLeft(Math.max(1, Math.ceil((endTime - now) / 1000)));
-            setIsRunning(true);
+             setSecondsLeft(Math.max(1, Math.ceil((endTime - now) / 1000)));
           }
         }
       }
@@ -240,15 +245,76 @@ export const TimerPage = ({ navigation }) => {
     return () => {
       subscription.remove();
     };
-  }, []);
+  }, [timerCompleteModalVisible]);
 
-  // --- HELPER: Stop & Cleanup ---
-  const stopForegroundTimer = () => {
-    setIsRunning(false);
-    if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-        intervalRef.current = null;
-    }
+  // --- HELPER: Unified Ticker Starter ---
+  const startTicker = () => {
+      // Clear any existing standard JS interval
+      if (intervalRef.current) clearInterval(intervalRef.current);
+
+      // Define the tick logic
+      const tick = () => {
+          const now = Date.now();
+          if (!timerFinishTimeRef.current) return;
+          
+          const remaining = Math.ceil((timerFinishTimeRef.current - now) / 1000);
+
+          if (__DEV__ && remaining >= 0 && remaining <= 5) { 
+               console.log(`[TimerPage] Tick: ${remaining}s (AppState: ${AppState.currentState})`);
+          }
+
+          if (remaining <= 0) {
+            console.log("[TimerPage] Timer finished.");
+            stopTicker();
+            setSecondsLeft(0);
+
+            // Fire immediate notification if we are in background
+            if (AppState.currentState.match(/inactive|background/)) {
+                console.log("[TimerPage] Firing notification from background ticker.");
+                Notifications.scheduleNotificationAsync({
+                    content: {
+                        title: "⏰ Timer Finished!",
+                        body: "Tap here to open the app and choose an action.",
+                        sound: true,
+                        priority: Notifications.AndroidNotificationPriority.HIGH,
+                    },
+                    trigger: null,
+                });
+            }
+            onTimerComplete();
+          } else {
+             setSecondsLeft(prev => (prev !== remaining ? remaining : prev));
+          }
+      };
+
+      // Try to use BackgroundTimer, fall back to standard setInterval if it fails
+      if (BackgroundTimer && typeof BackgroundTimer.runBackgroundTimer === 'function') {
+          console.log("[TimerPage] Starting native BackgroundTimer.");
+          try {
+              BackgroundTimer.runBackgroundTimer(tick, 1000);
+          } catch (e) {
+              console.error("Failed to start BackgroundTimer, falling back to JS interval:", e);
+              intervalRef.current = setInterval(tick, 1000);    
+          }
+      } else {
+          console.warn("[TimerPage] BackgroundTimer not available. Using standard JS interval (will stop in background).");
+          intervalRef.current = setInterval(tick, 1000);
+      }
+  };
+
+  // --- HELPER: Unified Ticker Stopper ---
+  const stopTicker = () => {
+      setIsRunning(false);
+      if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+          intervalRef.current = null;
+      }
+      // Safe native stop
+      if (BackgroundTimer && typeof BackgroundTimer.stopBackgroundTimer === 'function') {
+          try {
+             BackgroundTimer.stopBackgroundTimer();
+          } catch(e) { console.warn("Error stopping background timer:", e); }
+      }
   };
 
   const cleanupTimerState = async () => {
@@ -259,37 +325,15 @@ export const TimerPage = ({ navigation }) => {
     await AsyncStorage.removeItem(TIMER_TOTAL_SECONDS_KEY);
   };
 
-  // --- FOREGROUND TIMER LOGIC ---
+  // --- EFFECT: Handle Running State Changes ---
   useEffect(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-
     if (isRunning && timerFinishTimeRef.current !== null) {
-      intervalRef.current = setInterval(() => {
-        const now = Date.now();
-
-        // START GUARD: Don't allow finishing within 1s of starting
-        if (now - startTimestampRef.current < 1000) return;
-
-        const remaining = Math.ceil((timerFinishTimeRef.current - now) / 1000);
-
-        if (__DEV__ && secondsLeft !== remaining && remaining >= 0 && remaining <= 5) { 
-             console.log(`[TimerPage] Tick: ${remaining}s`);
-        }
-
-        if (remaining <= 0) {
-          console.log("[TimerPage] Timer natural finish.");
-          stopForegroundTimer();
-          setSecondsLeft(0); 
-          onTimerComplete();
-        } else {
-          setSecondsLeft(prev => (prev !== remaining ? remaining : prev));
-        }
-      }, 250);
+        startTicker();
+    } else {
+        stopTicker();
     }
 
-    return () => {
-       if (intervalRef.current) clearInterval(intervalRef.current);
-    };
+    return () => stopTicker();
   }, [isRunning]); 
 
   // --- ACTIONS ---
@@ -299,7 +343,7 @@ export const TimerPage = ({ navigation }) => {
 
     Vibration.cancel(); 
     setTimerCompleteModalVisible(false);
-    stopForegroundTimer();
+    stopTicker();
 
     const h = Number(selectedHour) || 0;
     const m = Number(selectedMinute) || 0;
@@ -316,13 +360,8 @@ export const TimerPage = ({ navigation }) => {
       await Notifications.dismissAllNotificationsAsync();
       await Notifications.cancelAllScheduledNotificationsAsync();
 
-      // Small delay to let the modal fully close and state settle
-      await new Promise(resolve => setTimeout(resolve, 50));
-
       const now = Date.now();
-      startTimestampRef.current = now; // Mark start time
-      // 500ms buffer for UI smoothness, ensures first tick isn't weird
-      const targetEndTime = now + (total * 1000) + 500; 
+      const targetEndTime = now + (total * 1000); 
       
       console.log(`[TimerPage] START. Duration: ${total}s. Target End: ${targetEndTime}`);
 
@@ -331,11 +370,9 @@ export const TimerPage = ({ navigation }) => {
       setSecondsLeft(total);
       setIsRunning(true);
 
-      AsyncStorage.setItem(LAST_TIMER_KEY, JSON.stringify({ hour: h, minute: m, second: s }));
-      AsyncStorage.setItem(TIMER_END_TIME_KEY, String(targetEndTime));
-      AsyncStorage.setItem(TIMER_TOTAL_SECONDS_KEY, String(total));
-
-      // Notification scheduling removed (now handled on completion)
+      await AsyncStorage.setItem(LAST_TIMER_KEY, JSON.stringify({ hour: h, minute: m, second: s }));
+      await AsyncStorage.setItem(TIMER_END_TIME_KEY, String(targetEndTime));
+      await AsyncStorage.setItem(TIMER_TOTAL_SECONDS_KEY, String(total));
 
     } catch (e) {
       console.error('[TimerPage] Error during start:', e);
@@ -347,52 +384,28 @@ export const TimerPage = ({ navigation }) => {
 
   const pauseTimer = async () => {
     console.log("[TimerPage] Pausing.");
-    stopForegroundTimer();
+    stopTicker();
     try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch(e) {}
-    setScheduledNotificationId(null);
     await AsyncStorage.removeItem(TIMER_END_TIME_KEY);
-    await AsyncStorage.removeItem(TIMER_TOTAL_SECONDS_KEY);
   };
 
   const resumeTimer = async () => {
     if (secondsLeft > 0) {
         console.log(`[TimerPage] Resuming with ${secondsLeft}s left.`);
         const now = Date.now();
-        startTimestampRef.current = now;
-        const targetEndTime = now + (secondsLeft * 1000) + 500;
+        const targetEndTime = now + (secondsLeft * 1000);
         
         timerFinishTimeRef.current = targetEndTime;
         setIsRunning(true);
-
-        AsyncStorage.setItem(TIMER_END_TIME_KEY, String(targetEndTime));
-        
-        setTimeout(async () => {
-             try {
-                await Notifications.cancelAllScheduledNotificationsAsync();
-                await Notifications.scheduleNotificationAsync({
-                    content: {
-                        title: "圷 Timer Finished!",
-                        body: "Tap here to open the app and choose an action.",
-                        sound: true,
-                        priority: Notifications.AndroidNotificationPriority.HIGH,
-                    },
-                    trigger: {
-                        seconds: secondsLeft + 3,
-                        repeats: false,
-                        channelId: Platform.OS === 'android' ? NOTIFICATION_CHANNEL_ID : undefined,
-                    },
-                });
-             } catch (e) { console.error(e); }
-        }, 500);
+        await AsyncStorage.setItem(TIMER_END_TIME_KEY, String(targetEndTime));
     }
   };
 
   const cancelTimer = async () => {
     console.log("[TimerPage] Cancelling manually.");
-    stopForegroundTimer();
+    stopTicker();
     cleanupTimerState();
     try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch(e) {}
-    setScheduledNotificationId(null);
   };
 
   const setPreset = (hours = 0, minutes = 0, seconds = 0) => {
@@ -406,37 +419,11 @@ export const TimerPage = ({ navigation }) => {
   };
 
   const onTimerComplete = async () => {
-  // Double check we didn’t just start (less than 1s ago)
-  if (Date.now() - startTimestampRef.current < 1000) {
-    console.warn("[TimerPage] Premature completion detected, ignoring.");
-    return;
-  }
-
-  console.log("[TimerPage] Timer finished in foreground.");
-  try {
-    await Notifications.cancelAllScheduledNotificationsAsync();
-
-    // 🔔 Schedule the notification only now that the timer truly ended
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: "⏰ Timer Finished!",
-        body: "Tap here to open the app and choose an action.",
-        sound: true,
-        priority: Notifications.AndroidNotificationPriority.HIGH,
-      },
-      trigger: null, // fire immediately
-    });
-
-  } catch (e) {
-    console.error("[TimerPage] Notification scheduling failed:", e);
-  }
-
-  await cleanupTimerState();
-  Vibration.vibrate(
-    Platform.OS === 'android' ? [0, 500, 500, 500] : [500, 500, 500]
-  );
-  setTimerCompleteModalVisible(true);
-};
+    try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch(e) {}
+    await cleanupTimerState();
+    Vibration.vibrate(Platform.OS === 'android' ? [0, 500, 500, 500] : [500, 500, 500]);
+    setTimerCompleteModalVisible(true);
+  };
 
   const requestLocationPermissionsAsync = async () => {
     let { status } = await Location.requestForegroundPermissionsAsync();
@@ -480,7 +467,7 @@ export const TimerPage = ({ navigation }) => {
           try {
             let location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
             const { latitude, longitude } = location.coords;
-            fullMessage += `\nMy location: https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+            fullMessage += `\nMy location: http://googleusercontent.com/maps.google.com/maps?q=${latitude},${longitude}`;
           } catch (locationError) {
             console.error('Error getting location', locationError); fullMessage += '\n(Could not get current location.)';
           }
@@ -536,7 +523,7 @@ export const TimerPage = ({ navigation }) => {
           </Svg>
           <View style={styles.timerTextContainer}>
             <Text style={styles.timerDisplayRunning}>{formatTime(secondsLeft)}</Text>
-            <Text style={styles.endTimeText}>潤 {endTimeString}</Text>
+            <Text style={styles.endTimeText}>⏰ {endTimeString}</Text>
           </View>
         </View>
         <View style={styles.presetContainer}>
@@ -574,7 +561,7 @@ export const TimerPage = ({ navigation }) => {
            </Svg>
            <View style={styles.timerTextContainer}>
              <Text style={[styles.timerDisplayRunning, { color: progressPausedColor }]}>{formatTime(secondsLeft)}</Text>
-             <Text style={[styles.endTimeText, { color: progressPausedColor }]}>潤 {endTimeString} (Paused)</Text>
+             <Text style={[styles.endTimeText, { color: progressPausedColor }]}>⏰ {endTimeString} (Paused)</Text>
            </View>
          </View>
          <View style={styles.presetContainer}>
