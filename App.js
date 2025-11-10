@@ -32,6 +32,11 @@ import JourneySharingPageV2 from './components/JourneySharing/JourneySharingPage
 import TrackAFriendPage from './components/JourneySharing/TrackAFriendPage';
 import TrackingDetailPage from './components/JourneySharing/TrackingDetailPage';
 import LocationHistoryPage from './components/LocationHistoryPage';
+import GeofenceManagementPage from './screens/GeofenceManagementPage';
+import CreateGeofencePage from './screens/CreateGeofencePage';
+import { registerForPushNotifications, saveUserToken } from './services/expoPushService';
+import { getActiveGeofences } from './services/geofenceStorage';
+import { startGeofenceMonitoring } from './services/geofencingService';
 
 
 export default function App() {
@@ -85,6 +90,31 @@ export default function App() {
         }
     };
     loadAllSettings();
+  }, []);
+
+  // --- Initialize geofencing and push notifications ---
+  useEffect(() => {
+    const initializeGeofencing = async () => {
+      try {
+        const token = await registerForPushNotifications();
+        if (token) {
+          let userId = await AsyncStorage.getItem('userId');
+          if (!userId) {
+            userId = `user_${Date.now()}`;
+            await AsyncStorage.setItem('userId', userId);
+          }
+          await saveUserToken(userId, token);
+        }
+
+        const activeGeofences = await getActiveGeofences();
+        if (activeGeofences.length > 0) {
+          await startGeofenceMonitoring(activeGeofences);
+        }
+      } catch (error) {
+        console.error('Error initializing geofencing:', error);
+      }
+    };
+    initializeGeofencing();
   }, []);
 
   // --- Volume listener effect ---
@@ -267,6 +297,9 @@ export default function App() {
       case 'TrackAFriend': return <TrackAFriendPage onBack={() => setCurrentPage('JourneySharing')} onNavigate={handleNavigate} />;
       case 'TrackingDetail': return <TrackingDetailPage onBack={() => setCurrentPage('JourneySharing')} sessionId={navigationParams} />;
       case 'LocationHistory': return <LocationHistoryPage onBack={goHome} />;
+      case 'GeofenceManagement': return <GeofenceManagementPage onBack={goHome} onNavigate={handleNavigate} />;
+      case 'CreateGeofence': return <CreateGeofencePage onBack={() => setCurrentPage('GeofenceManagement')} onNavigate={handleNavigate} />;
+      case 'EditGeofence': return <CreateGeofencePage onBack={() => setCurrentPage('GeofenceManagement')} onNavigate={handleNavigate} geofenceId={navigationParams} />;
       case 'FakeCallSettings':
           return (
             <FakeCallSettingsPage

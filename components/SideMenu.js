@@ -34,6 +34,10 @@ export const SideMenu = ({ isOpen, onClose, onNavigate }) => (
                     <Text style={styles.menuIcon}>🗺️</Text>
                     <Text style={styles.sideMenuLinkText}>Location History</Text>
                 </TouchableOpacity>
+                <TouchableOpacity style={styles.sideMenuLink} onPress={() => onNavigate('GeofenceManagement')}>
+                    <Text style={styles.menuIcon}>🔔</Text>
+                    <Text style={styles.sideMenuLinkText}>Geofence Alerts</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.sideMenuLink} onPress={() => onNavigate('DiscreetMode')}>
                     <EyeOffIcon color="#374151" />
                     <Text style={styles.sideMenuLinkText}>Discreet Mode</Text>
