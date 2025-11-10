@@ -8,6 +8,7 @@ import Animated, {
   withTiming,
   withSequence,
   Easing,
+  runOnJS, // <--- IMPORT THIS explicitly
 } from 'react-native-reanimated';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -62,13 +63,20 @@ export const HomePage = ({
     };
   });
 
+  // --- FIX: Separate navigation function ---
+  const handleSwipeUp = () => {
+    if (navigation) {
+      navigation.navigate('SecondaryHome');
+    }
+  };
+
   const swipeUpGesture = Gesture.Fling()
     .direction(Directions.UP)
     .onEnd(() => {
-      if (navigation) {
-          navigation.navigate('SecondaryHome');
-      }
+      'worklet'; // Explicitly mark as running on UI thread
+      runOnJS(handleSwipeUp)(); // Explicitly call the JS function back on the JS thread
     });
+  // ----------------------------------------
 
   const panResponder = useRef(
     PanResponder.create({

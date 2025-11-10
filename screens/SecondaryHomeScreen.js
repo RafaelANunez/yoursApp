@@ -33,6 +33,7 @@ const SecondaryHomeScreen = ({ navigation }) => {
 
   const swipeDownGesture = Gesture.Fling()
     .direction(Directions.DOWN)
+    .runOnJS(true) // <--- Add this line ensuring it runs on the JS thread
     .onEnd(() => navigation.canGoBack() && navigation.goBack());
 
   const features = [
