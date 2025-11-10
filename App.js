@@ -376,6 +376,10 @@ function AppContent() {
                           <JournalIcon />
                           <Text style={styles.navButtonText}>Journal</Text>
                         </TouchableOpacity>
+                        <TouchableOpacity onPress={() => props.navigation.navigate('Record')} style={styles.navButton}>
+                          <RecordIcon />
+                          <Text style={styles.navButtonText}>Record</Text>
+                        </TouchableOpacity>
                         <TouchableOpacity onPress={() => props.navigation.navigate('Panic')} style={styles.navButton}>
                           <AlertIcon />
                           <Text style={styles.navButtonText}>Panic</Text>

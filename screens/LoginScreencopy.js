@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image, SafeAreaView, Platform } from 'react-native';
+import React, { useState, Platform } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image, SafeAreaView } from 'react-native';
 import { LockIcon, MailIcon } from '../components/Icons'; // Assuming icons are in ../components/Icons.js
 import { useAuth } from '../context/AuthContext'; // Import useAuth
 
@@ -35,15 +35,31 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
-  return ( //loginscreen
+  return (
     <SafeAreaView style={styles.safeArea}>
+      if (Platform.OS === 'ios') {
+        <View style={styles.topShape}>
+        <Image
+            source={require('../assets/logo_version1.png')} 
+            style={styles.illustration}
+            resizeMode="contain"
+          />
+      </View>
+      }
+      else
+      {
+        <React.Fragment>
         <View style={styles.topShape}></View>
-            <Image
-              source={require('../assets/logo_version1.png')} 
-              style={styles.illustration}
-              resizeMode="contain"
-            />
-        <View style={styles.container}>
+        <Image
+            source={require('../assets/logo_version1.png')} 
+            style={styles.illustration}
+            resizeMode="contain"
+          />
+        </React.Fragment>
+      }
+      
+      <View style={styles.container}>
+        
         <Text style={styles.welcomeTitle}>Welcome back!</Text>
         <Text style={styles.welcomeSubtitle}>Log in to your existing account of YourApp</Text>
 
@@ -128,13 +144,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: Platform.OS === 'ios' ? '7%' : 30,
-    paddingTop: Platform.OS === 'ios' ? '10%' :'20%', 
+    paddingTop: Platform.OS === 'ios' ? '65%' :'20%', 
     alignItems: 'center',
   },
   illustration: {
     width: '100%',
     height: 270, 
-    top: Platform.OS === 'ios' ? '5%' : -50,
+    top: Platform.OS === 'ios' ? '15%' : -50,
     marginBottom: Platform.OS === 'ios' ? '-10%' : 0,
     marginLeft: Platform.OS === 'ios' ? '10%' : 0,
   },
@@ -158,7 +174,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 25,
     borderWidth: 1,
-    borderColor: '#F87171',
+    borderColor: '#F87171', 
     height: 50,
     marginBottom: Platform.OS === 'ios' ? 20 : 15,
     paddingHorizontal: 15,
