@@ -1,59 +1,88 @@
-import React, { useState, useEffect, useRef } from 'react'; // --- MODIFIED: Added useRef ---
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TextInput, Alert, TouchableOpacity, SafeAreaView, Keyboard } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 import { PageHeader } from '../components/PageHeader';
 
-// (Initial grid and solution data remain the same)
-const initialGrid = [
-  [0, 0, 0, 0, 0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0, 0, 0, 0, 0],
-];
-const emergencyGrid = [
-  [0, 3, 0, 0, 7, 0, 0, 0, 0],
-  [6, 0, 0, 1, 9, 5, 0, 0, 0],
-  [0, 9, 8, 0, 0, 0, 0, 6, 0],
-  [8, 0, 0, 0, 6, 0, 0, 0, 3],
-  [4, 0, 0, 8, 0, 3, 0, 0, 1],
-  [7, 0, 0, 0, 2, 0, 0, 0, 6],
-  [0, 6, 0, 0, 0, 0, 2, 8, 0],
-  [0, 0, 0, 4, 1, 9, 0, 0, 5],
-  [0, 0, 0, 0, 8, 0, 0, 7, 0],
+// A valid solved Sudoku grid base
+const baseSolvedGrid = [
+  [5, 3, 4, 6, 7, 8, 9, 1, 2],
+  [6, 7, 2, 1, 9, 5, 3, 4, 8],
+  [1, 9, 8, 3, 4, 2, 5, 6, 7],
+  [8, 5, 9, 7, 6, 1, 4, 2, 3],
+  [4, 2, 6, 8, 5, 3, 7, 9, 1],
+  [7, 1, 3, 9, 2, 4, 8, 5, 6],
+  [9, 6, 1, 5, 3, 7, 2, 8, 4],
+  [2, 8, 7, 4, 1, 9, 6, 3, 5],
+  [3, 4, 5, 2, 8, 6, 1, 7, 9]
 ];
 
+// --- NEW: Function to generate a randomized puzzle with empty top row ---
+const generateSudoku = () => {
+    // 1. Deep copy base grid
+    let newGrid = baseSolvedGrid.map(row => [...row]);
+
+    // 2. Shuffle numbers (map 1-9 to new random 1-9)
+    const nums = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+    for (let i = nums.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [nums[i], nums[j]] = [nums[j], nums[i]];
+    }
+    const map = {};
+    [1, 2, 3, 4, 5, 6, 7, 8, 9].forEach((n, i) => map[n] = nums[i]);
+
+    for(let r=0; r<9; r++) {
+        for(let c=0; c<9; c++) {
+            newGrid[r][c] = map[newGrid[r][c]];
+        }
+    }
+
+    // 3. Clear TOP ROW completely (for bypass code input)
+    for(let c=0; c<9; c++) {
+        newGrid[0][c] = 0;
+    }
+
+    // 4. Randomly clear other cells to make it a puzzle (e.g., ~40 more cells)
+    let cellsToClear = 40;
+    while(cellsToClear > 0) {
+        const r = Math.floor(Math.random() * 8) + 1; // rows 1-8 (don't touch top row 0)
+        const c = Math.floor(Math.random() * 9);
+        if(newGrid[r][c] !== 0) {
+            newGrid[r][c] = 0;
+            cellsToClear--;
+        }
+    }
+    return newGrid;
+};
+// -----------------------------------------------------------------------
+
 const SudokuScreen = ({ onBypassSuccess, isEmergencyMode }) => {
-  const { user } = useAuth(); // Get the current user
+  const { user } = useAuth();
   
-  const [grid, setGrid] = useState(isEmergencyMode ? emergencyGrid : initialGrid);
+  // Initialize with a fresh random grid every time component mounts
+  const [grid, setGrid] = useState(generateSudoku); 
+  
   const [bypassCode, setBypassCode] = useState('');
   const [userInput, setUserInput] = useState(Array(9).fill(''));
   const [activeCell, setActiveCell] = useState(null);
-  
   const [bypassCodeKey, setBypassCodeKey] = useState(null);
-  
-  // --- ADDED: Create a ref to hold all cell input references ---
   const cellRefs = useRef({});
 
-  // (useEffect for setting bypassCodeKey remains the same)
   useEffect(() => {
     if (user?.email) {
       setBypassCodeKey(`@${user.email}_bypass_code`);
     }
   }, [user]);
 
-  // (useEffect for loading bypassCode remains the same)
   useEffect(() => {
     if (bypassCodeKey) {
       loadBypassCode();
     }
   }, [bypassCodeKey]);
+
+  // OPTIONAL: Regenerate grid when screen comes into focus if you want it to change 
+  // every single time they navigate back and forth, not just on first mount.
+  // You'd need to import useFocusEffect from @react-navigation/native for that.
 
   const loadBypassCode = async () => {
     if (!bypassCodeKey) return; 
@@ -61,8 +90,6 @@ const SudokuScreen = ({ onBypassSuccess, isEmergencyMode }) => {
       const code = await AsyncStorage.getItem(bypassCodeKey);
       if (code) {
         setBypassCode(code);
-      } else {
-        console.warn('No bypass code set for this user.');
       }
     } catch (e) {
       console.error('Failed to load bypass code', e);
@@ -71,30 +98,30 @@ const SudokuScreen = ({ onBypassSuccess, isEmergencyMode }) => {
 
   const handleInputChange = (text, index) => {
     const newInputs = [...userInput];
-    newInputs[index] = text.replace(/[^1-9]/g, ''); // Only allow 1-9
+    newInputs[index] = text.replace(/[^1-9]/g, '');
     setUserInput(newInputs);
 
-    // Check for bypass
+    // Check for bypass code ALWAYS if it's entered in the top row
     const enteredCode = newInputs.join('');
     if (bypassCode && enteredCode.length === bypassCode.length && enteredCode === bypassCode) {
-      Alert.alert('Bypass Activated', 'Loading app...');
-      onBypassSuccess();
+        Alert.alert('Bypass Activated', 'Loading app...');
+        onBypassSuccess();
+        return;
     }
     
-    // Auto-focus next cell
     if (text && index < 8) {
-      // --- MODIFIED: Use the cellRefs.current object instead of 'this' ---
       cellRefs.current[`cell_${index + 1}`]?.focus();
     }
   };
 
   const renderCell = (row, col) => {
     const value = grid[row][col];
+    // Top row (row === 0) is ALWAYS an input row now
     const isFirstRow = row === 0;
-    const cellIndex = col;
 
     if (isFirstRow) {
-      return (
+       const cellIndex = col;
+       return (
         <TextInput
           style={[
             styles.cell,
@@ -107,7 +134,6 @@ const SudokuScreen = ({ onBypassSuccess, isEmergencyMode }) => {
           onBlur={() => setActiveCell(null)}
           keyboardType="number-pad"
           maxLength={1}
-          // --- MODIFIED: Save the input reference to cellRefs.current ---
           ref={(input) => { cellRefs.current[`cell_${cellIndex}`] = input; }}
         />
       );
@@ -124,6 +150,7 @@ const SudokuScreen = ({ onBypassSuccess, isEmergencyMode }) => {
       <View style={styles.container}>
         <Text style={styles.title}>Sudoku</Text>
         <Text style={styles.subtitle}>Enter bypass code in the first row to unlock</Text>
+
         <View style={styles.grid}>
           {grid.map((row, rowIndex) => (
             <View key={rowIndex} style={[
@@ -134,7 +161,7 @@ const SudokuScreen = ({ onBypassSuccess, isEmergencyMode }) => {
                 <View key={colIndex} style={[
                   styles.cell,
                   (colIndex + 1) % 3 === 0 && colIndex !== 8 && styles.thickBorderRight,
-                  rowIndex === 0 && styles.inputRow, // Highlight the input row
+                  rowIndex === 0 && styles.inputRow, // Always highlight top row
                 ]}>
                   {renderCell(rowIndex, colIndex)}
                 </View>
