@@ -41,6 +41,12 @@ export default function CreateGeofencePage({ onBack, geofenceId }) {
     latitudeDelta: 0.01,
     longitudeDelta: 0.01,
   });
+  // Address search states
+  const [address, setAddress] = useState('');
+  const [searchError, setSearchError] = useState('');
+  const [searching, setSearching] = useState(false);
+  // Custom radius state
+  const [customRadius, setCustomRadius] = useState('100');
 
   const isEditMode = !!geofenceId;
 
@@ -87,6 +93,7 @@ export default function CreateGeofencePage({ onBack, geofenceId }) {
           longitudeDelta: 0.01,
         });
         setRadius(geofence.radius);
+        setCustomRadius(geofence.radius.toString());
         setNotifyOnArrival(geofence.notifyOnArrival);
         setNotifyOnDeparture(geofence.notifyOnDeparture);
 
@@ -109,6 +116,102 @@ export default function CreateGeofencePage({ onBack, geofenceId }) {
     setLocation(coordinate);
   };
 
+  const handleAddressSearch = async () => {
+    if (!address.trim()) {
+      setSearchError('Please enter an address');
+      return;
+    }
+
+    setSearching(true);
+    setSearchError('');
+
+    try {
+      // Geocode the address
+      const results = await Location.geocodeAsync(address);
+
+      if (results.length === 0) {
+        setSearchError('Address not found. Please try a different search.');
+        setSearching(false);
+        return;
+      }
+
+      // Use first result
+      const locationResult = results[0];
+      const newLocation = {
+        latitude: locationResult.latitude,
+        longitude: locationResult.longitude,
+      };
+
+      setLocation(newLocation);
+      setRegion({
+        latitude: locationResult.latitude,
+        longitude: locationResult.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      });
+
+      // Clear error on success
+      setSearchError('');
+
+      Alert.alert('Success', 'Location found!');
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      if (error.message && error.message.includes('network')) {
+        setSearchError('No internet connection. Please check your network.');
+      } else {
+        setSearchError('Failed to find address. Please try again or use the map.');
+      }
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleCustomRadiusChange = (text) => {
+    // Only allow numbers
+    const numericText = text.replace(/[^0-9]/g, '');
+    setCustomRadius(numericText);
+
+    // Update radius if valid number
+    if (numericText && !isNaN(numericText)) {
+      const value = parseInt(numericText, 10);
+
+      // Validate range
+      if (value < 10) {
+        // Too small - set to minimum
+        setRadius(10);
+      } else if (value > 5000) {
+        // Too large - set to maximum
+        setRadius(5000);
+      } else {
+        setRadius(value);
+      }
+    }
+  };
+
+  const handleRadiusBlur = () => {
+    // When user leaves the input, validate and set final value
+    if (customRadius) {
+      const value = parseInt(customRadius, 10);
+      if (value < 10) {
+        setCustomRadius('10');
+        setRadius(10);
+        Alert.alert('Minimum Radius', 'Minimum radius is 10 meters');
+      } else if (value > 5000) {
+        setCustomRadius('5000');
+        setRadius(5000);
+        Alert.alert('Maximum Radius', 'Maximum radius is 5000 meters (5km)');
+      }
+    } else {
+      // If empty, reset to current radius
+      setCustomRadius(radius.toString());
+    }
+  };
+
+  const selectPresetRadius = (r) => {
+    setRadius(r);
+    setCustomRadius(r.toString());
+  };
+
   const toggleContactSelection = (contactId) => {
     setSelectedContacts((prev) =>
       prev.includes(contactId)
@@ -125,6 +228,17 @@ export default function CreateGeofencePage({ onBack, geofenceId }) {
 
     if (!location) {
       Alert.alert('Validation Error', 'Please select a location on the map');
+      return;
+    }
+
+    // Validate radius
+    if (radius < 10) {
+      Alert.alert('Invalid Radius', 'Radius must be at least 10 meters');
+      return;
+    }
+
+    if (radius > 5000) {
+      Alert.alert('Invalid Radius', 'Radius cannot exceed 5000 meters (5km)');
       return;
     }
 
@@ -190,6 +304,43 @@ export default function CreateGeofencePage({ onBack, geofenceId }) {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Search by Address</Text>
+          <Text style={styles.helperText}>
+            Enter an address to automatically find the location
+          </Text>
+          <Text style={styles.helperText}>
+            Examples: "123 Main St, Boston, MA" or "Empire State Building, NYC"
+          </Text>
+
+          <View style={styles.addressSearchContainer}>
+            <TextInput
+              style={styles.addressInput}
+              value={address}
+              onChangeText={setAddress}
+              placeholder="e.g., 123 Main St, New York, NY"
+              placeholderTextColor="#999"
+              returnKeyType="search"
+              onSubmitEditing={handleAddressSearch}
+            />
+            <TouchableOpacity
+              style={[styles.searchButton, searching && styles.searchButtonDisabled]}
+              onPress={handleAddressSearch}
+              disabled={searching}
+            >
+              <Text style={styles.searchButtonText}>
+                {searching ? 'Searching...' : 'Search'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {searchError ? (
+            <Text style={styles.errorText}>{searchError}</Text>
+          ) : null}
+
+          <Text style={styles.orText}>OR tap on the map below</Text>
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.sectionTitle}>Select Location</Text>
           <Text style={styles.sectionSubtitle}>Tap on the map to set location</Text>
           <View style={styles.mapContainer}>
@@ -217,20 +368,27 @@ export default function CreateGeofencePage({ onBack, geofenceId }) {
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Radius</Text>
+          <Text style={styles.helperText}>
+            Select a preset or enter a custom radius (10m - 5000m)
+          </Text>
+          <Text style={styles.helperText}>
+            Recommended: Home/Work (100m), School (200m), City Area (500m)
+          </Text>
+
           <View style={styles.radiusOptions}>
             {RADIUS_OPTIONS.map((option) => (
               <TouchableOpacity
                 key={option.value}
                 style={[
                   styles.radiusButton,
-                  radius === option.value && styles.radiusButtonSelected,
+                  radius === option.value && customRadius === option.value.toString() && styles.radiusButtonSelected,
                 ]}
-                onPress={() => setRadius(option.value)}
+                onPress={() => selectPresetRadius(option.value)}
               >
                 <Text
                   style={[
                     styles.radiusButtonText,
-                    radius === option.value && styles.radiusButtonTextSelected,
+                    radius === option.value && customRadius === option.value.toString() && styles.radiusButtonTextSelected,
                   ]}
                 >
                   {option.label}
@@ -238,6 +396,26 @@ export default function CreateGeofencePage({ onBack, geofenceId }) {
               </TouchableOpacity>
             ))}
           </View>
+
+          <Text style={styles.orText}>OR enter custom radius:</Text>
+
+          <View style={styles.customRadiusContainer}>
+            <TextInput
+              style={styles.customRadiusInput}
+              value={customRadius}
+              onChangeText={handleCustomRadiusChange}
+              onBlur={handleRadiusBlur}
+              placeholder="Enter radius"
+              placeholderTextColor="#999"
+              keyboardType="number-pad"
+              maxLength={4}
+            />
+            <Text style={styles.customRadiusUnit}>meters</Text>
+          </View>
+
+          <Text style={styles.radiusNote}>
+            Current radius: {radius}m ({radius < 1000 ? radius : (radius / 1000).toFixed(1)}km)
+          </Text>
         </View>
 
         <View style={styles.section}>
@@ -493,5 +671,81 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  // Address search styles
+  helperText: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginBottom: 8,
+  },
+  addressSearchContainer: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 10,
+  },
+  addressInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: 'white',
+  },
+  searchButton: {
+    backgroundColor: '#F9A8D4',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    justifyContent: 'center',
+  },
+  searchButtonDisabled: {
+    backgroundColor: '#D1D5DB',
+  },
+  searchButtonText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 14,
+    marginBottom: 10,
+    marginTop: 5,
+  },
+  orText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginVertical: 10,
+    fontWeight: '500',
+  },
+  // Custom radius styles
+  customRadiusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  customRadiusInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: 'white',
+  },
+  customRadiusUnit: {
+    marginLeft: 10,
+    fontSize: 16,
+    color: '#374151',
+    fontWeight: '600',
+  },
+  radiusNote: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontStyle: 'italic',
+    marginTop: 5,
   },
 });
