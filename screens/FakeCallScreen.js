@@ -5,6 +5,7 @@ import * as Location from 'expo-location';
 import * as SMS from 'expo-sms';
 import { useEmergencyContacts } from '../context/EmergencyContactsContext';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage'; 
 import {
   PhoneIcon,
   RecordIcon,
@@ -14,6 +15,11 @@ import {
   MuteIcon,
   KeypadIcon,
 } from '../components/Icons';
+
+// Ringtone keys and default asset
+const RINGTONE_URI_KEY = '@fake_call_ringtone_uri'; 
+const DEFAULT_RINGTONE_ASSET = require('../assets/sounds/ringtone.mp3'); 
+const DEFAULT_RINGTONE_PATH = '../assets/sounds/ringtone.mp3';
 
 // In-call action button component
 const InCallButton = ({ icon, text, onPress, isActive }) => (
@@ -62,11 +68,35 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
     hold: false,
     bluetooth: false,
   });
+  // State for dynamically loaded ringtone source
+  const [ringtoneSource, setRingtoneSource] = useState(DEFAULT_RINGTONE_ASSET);
+  // State to track if the ringtone setting has been loaded
+  const [isRingtoneSettingsLoaded, setIsRingtoneSettingsLoaded] = useState(false); 
 
   const { contacts } = useEmergencyContacts();
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const soundRef = useRef(null);
   const navigation = useNavigation();
+
+  // Load custom ringtone URI from AsyncStorage on mount
+  useEffect(() => {
+    const loadRingtone = async () => {
+        try {
+            const storedUri = await AsyncStorage.getItem(RINGTONE_URI_KEY);
+            if (storedUri && storedUri !== DEFAULT_RINGTONE_PATH) {
+                setRingtoneSource({ uri: storedUri });
+            } else {
+                setRingtoneSource(DEFAULT_RINGTONE_ASSET);
+            }
+        } catch (e) {
+            console.error("Failed to load ringtone URI:", e);
+            setRingtoneSource(DEFAULT_RINGTONE_ASSET);
+        } finally {
+            setIsRingtoneSettingsLoaded(true); 
+        }
+    };
+    loadRingtone();
+  }, []);
 
   // Pulsating animation for incoming call
   useEffect(() => {
@@ -91,39 +121,65 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
     }
   }, [keypadInput]);
 
-  // Main call logic (sound + vibration)
-  useEffect(() => {
-    let interval;
+  // FIX: Stable stopRingtone to avoid race conditions and null errors, and accept ref
+  const stopRingtone = async (ref) => { // Ref is passed in
+    Vibration.cancel(); 
+    const soundToStop = ref.current; // Capture the object locally
+    
+    // Crucial step: Clear the ref *before* async operations to prevent re-entry/double-stop
+    ref.current = null; 
 
-    async function setupAudioAndVibration() {
+    if (soundToStop) {
       try {
-        if (soundRef.current) {
-          await soundRef.current.stopAsync();
-          await soundRef.current.unloadAsync();
-          soundRef.current = null;
+        const status = await soundToStop.getStatusAsync();
+        if (status.isLoaded) {
+            // Check if sound is actually playing or loaded before unloading
+            if (status.isPlaying) {
+                await soundToStop.stopAsync();
+            }
+            // Always unload to free resources and prevent echo on next play
+            await soundToStop.unloadAsync(); 
         }
+      } catch (e) {
+        // Log the error but don't halt execution
+        console.warn("Error during sound unload/stop:", e); 
+      }
+    }
+  };
 
-        await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+  // Main audio setup function
+  const setupAudioAndVibration = async () => {
+      // 1. Ensure any currently playing audio is STOPPED BEFORE starting a new one (prevents echo)
+      await stopRingtone(soundRef); 
+
+      try {
+        await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false, staysActiveInBackground: false, shouldDuckAndroid: true });
+        
         const { sound } = await Audio.Sound.createAsync(
-          require('../assets/sounds/ringtone.mp3')
+          ringtoneSource
         );
+        
         soundRef.current = sound;
         await sound.setIsLoopingAsync(true);
         await sound.playAsync();
         Vibration.vibrate([400, 1000], true);
       } catch (error) {
-        console.warn("Could not play ringtone.", error);
+        console.warn("Could not play ringtone:", error);
+        stopRingtone(soundRef); 
       }
-    }
+  };
+
+  // Main call logic (sound + timer)
+  useEffect(() => {
+    let interval;
 
     if (callState === 'answered') {
-      stopRingtone();
+      // Timer starts immediately after ringtone stop (handled by handleAccept)
       interval = setInterval(() => setTimer(prev => prev + 1), 1000);
     } else if (callState === 'ended') {
-      stopRingtone();
+      // Call ended sequence
       setTimeout(() => {
         onEndCall?.();
-        // Reset fake call flags to avoid re-trigger
         try {
           navigation.setParams({ triggerFakeCall: false, triggerSudoku: false });
         } catch (e) {
@@ -131,36 +187,29 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
         }
       }, 2000);
     } else if (callState === 'incoming') {
-      setupAudioAndVibration();
+      // Only attempt to play if settings are loaded
+      if (isRingtoneSettingsLoaded) { 
+          setupAudioAndVibration(); 
+      }
     }
 
+    // Cleanup: This is crucial for stopping the sound when the component unmounts
+    // or when callState changes, ensuring no background audio.
     return () => {
       clearInterval(interval);
-      Vibration.cancel();
-      stopRingtone();
+      stopRingtone(soundRef); 
     };
-  }, [callState]);
+  }, [callState, ringtoneSource, isRingtoneSettingsLoaded]);
 
-  const stopRingtone = async () => {
-    try {
-      if (soundRef.current) {
-        await soundRef.current.stopAsync();
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
-      }
-    } catch (e) {
-      console.warn("Error stopping ringtone", e);
-    }
-    Vibration.cancel();
-  };
-
-  const handleDecline = () => {
-    stopRingtone();
+  // FIX: Handle Decline - Await stopRingtone for guaranteed audio stop before state change
+  const handleDecline = async () => { 
+    await stopRingtone(soundRef); 
     setCallState('ended');
   };
 
-  const handleAccept = () => {
-    stopRingtone();
+  // FIX: Handle Accept - Await stopRingtone for guaranteed audio stop before state change
+  const handleAccept = async () => {
+    await stopRingtone(soundRef); 
     setCallState('answered');
   };
 
@@ -250,7 +299,7 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
             </View>
           </>
         )}
-        <TouchableOpacity style={[styles.callButton, styles.declineButton, { marginTop: 30 }]} onPress={() => setCallState('ended')}>
+        <TouchableOpacity style={[styles.callButton, styles.declineButton, { marginTop: 30 }]} onPress={handleDecline}>
           <PhoneIcon style={{ transform: [{ rotate: '135deg' }] }} />
         </TouchableOpacity>
       </View>

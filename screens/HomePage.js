@@ -1,6 +1,15 @@
 import React, { useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Platform, Pressable, PanResponder } from 'react-native';
 import { GestureDetector, Gesture, Directions } from 'react-native-gesture-handler';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withTiming,
+  withSequence,
+  Easing,
+} from 'react-native-reanimated';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const PageContainer = ({ children }) => (
     <View style={styles.pageContainer}>{children}</View>
@@ -13,19 +22,16 @@ export const HomePage = ({
   onNavigateToJournal, 
   onOpenMenu, 
   navigation,
-  route, // Ensure route is destructured here
+  route,
   onTriggerSudoku 
 }) => {
   const pressTimeout = useRef(null);
+  const translateY = useSharedValue(0);
 
-  // --- FIX: More reliable parameter listening ---
+  // Parameter listening effect
   useEffect(() => {
-    // Add a listener that fires every time this screen comes into focus
     const unsubscribe = navigation.addListener('focus', () => {
-        // Check the current params on the route
-        // We use 'route.params' which should be up-to-date if we used 'merge: true' in navigation
         if (route.params?.triggerFakeCall) {
-            // Clear param immediately so it doesn't trigger again on next generic focus
             navigation.setParams({ triggerFakeCall: undefined });
             if (onFakeCall) onFakeCall();
         } 
@@ -37,7 +43,24 @@ export const HomePage = ({
 
     return unsubscribe;
   }, [navigation, route, onFakeCall, onTriggerSudoku]);
-  // ---------------------------------------------
+
+  // Animation for the swipe indicator
+  useEffect(() => {
+    translateY.value = withRepeat(
+      withSequence(
+        withTiming(-10, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: 1500, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1, // Infinite repeat
+      true // Reverse animation on repeat
+    );
+  }, []);
+
+  const animatedIndicatorStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateY: translateY.value }],
+    };
+  });
 
   const swipeUpGesture = Gesture.Fling()
     .direction(Directions.UP)
@@ -78,36 +101,42 @@ export const HomePage = ({
   return (
     <GestureDetector gesture={swipeUpGesture}>
         <View style={{ flex: 1 }} {...panResponder.panHandlers}>
-        <ImageBackground
-            source={require('../assets/logo version1.png')}
-            style={styles.backgroundImage}
-            imageStyle={styles.backgroundImageStyle}
-        >
-            <TouchableOpacity
-            style={{ flex: 1 }}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-            activeOpacity={1}
+            <ImageBackground
+                source={require('../assets/logo version1.png')}
+                style={styles.backgroundImage}
+                imageStyle={styles.backgroundImageStyle}
             >
-            <PageContainer>
-                <Text style={styles.homeTitle}>Welcome to Yours</Text>
-                <Text style={styles.homeSubtitle}>You are in a safe space.</Text>
-                <Pressable
-                onPress={onNavigateToJournal}
-                style={({ pressed }) => [
-                    styles.journalButton,
-                    pressed && styles.journalButtonPressed
-                ]}
+                <TouchableOpacity
+                style={{ flex: 1 }}
+                onPressIn={handlePressIn}
+                onPressOut={handlePressOut}
+                activeOpacity={1}
                 >
-                {({ pressed }) => (
-                    <Text style={[styles.journalButtonText, pressed && styles.journalButtonTextPressed]}>
-                    Go to Journal
-                    </Text>
-                )}
-                </Pressable>
-            </PageContainer>
-            </TouchableOpacity>
-        </ImageBackground>
+                <PageContainer>
+                    <Text style={styles.homeTitle}>Welcome to Yours</Text>
+                    <Text style={styles.homeSubtitle}>You are in a safe space.</Text>
+                    <Pressable
+                    onPress={onNavigateToJournal}
+                    style={({ pressed }) => [
+                        styles.journalButton,
+                        pressed && styles.journalButtonPressed
+                    ]}
+                    >
+                    {({ pressed }) => (
+                        <Text style={[styles.journalButtonText, pressed && styles.journalButtonTextPressed]}>
+                        Go to Journal
+                        </Text>
+                    )}
+                    </Pressable>
+                </PageContainer>
+                </TouchableOpacity>
+            </ImageBackground>
+
+            {/* Animated Swipe Up Indicator */}
+            <Animated.View style={[styles.swipeIndicatorContainer, animatedIndicatorStyle]} pointerEvents="none">
+                <MaterialCommunityIcons name="chevron-double-up" size={24} color="#CD5F66" />
+                <Text style={styles.swipeIndicatorText}>Swipe up for more</Text>
+            </Animated.View>
         </View>
     </GestureDetector>
   );
@@ -163,5 +192,20 @@ const styles = StyleSheet.create({
       },
       journalButtonTextPressed: {
         color: 'white',
+      },
+      swipeIndicatorContainer: {
+        position: 'absolute',
+        bottom: 40,
+        alignSelf: 'center',
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: 0.8,
+        zIndex: 10,
+      },
+      swipeIndicatorText: {
+        color: '#CD5F66',
+        fontSize: 12,
+        marginTop: -2,
+        opacity: 0.8,
       },
 });
