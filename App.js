@@ -24,7 +24,7 @@ import { JournalProvider } from './context/JournalContext';
 import { EmergencyContactsProvider } from './context/EmergencyContactsContext';
 import { AutofillProvider } from './context/AutofillContext';
 
-import { JournalIcon, AlertIcon, TimerIcon, SettingsIcon } from './components/Icons';
+import { JournalIcon, AlertIcon, TimerIcon, SettingsIcon, RecordIcon } from './components/Icons';
 
 // Login/Signup Screens
 import LoginScreen from './screens/LoginScreen';
@@ -33,6 +33,7 @@ import SignupScreen from './screens/SignupScreen';
 // Core App Screens
 import { HomePage } from './screens/HomePage';
 import { JournalPage } from './screens/JournalPage';
+import { RecordingPage } from './screens/RecordingPage';
 import { PanicPage } from './screens/PanicPage';
 import { TimerPage } from './screens/TimerPage';
 import { SettingsPage } from './screens/SettingsPage';
@@ -409,6 +410,7 @@ function AppContent() {
 
               {/* Core Screens */}
               <Stack.Screen name="Journal" component={JournalPage} />
+              <Stack.Screen name="Record" component={RecordingPage} />
               <Stack.Screen name="Panic" component={PanicPage} />
               <Stack.Screen name="Timer" component={TimerPage} />
               <Stack.Screen name="Settings" component={SettingsPage} />
