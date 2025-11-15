@@ -33,7 +33,7 @@ import SignupScreen from './screens/SignupScreen';
 // Core App Screens
 import { HomePage } from './screens/HomePage';
 import { JournalPage } from './screens/JournalPage';
-import { RecordingPage } from './screens/RecordingPage';
+import { RecordingPage } from './screens/AudioRecording/RecordingPage';
 import { PanicPage } from './screens/PanicPage';
 import { TimerPage } from './screens/TimerPage';
 import { SettingsPage } from './screens/SettingsPage';

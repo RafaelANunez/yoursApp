@@ -1,8 +1,5 @@
-import React, { useState } from 'react';
-import { RecordingIcon, StopRecordingIcon } from '../components/Icons'; // Assuming icons are in ../components/Icons.js
+import { RecordingIcon, StopRecordingIcon } from '../../components/Icons'; // Assuming icons are in ../components/Icons.js
 import { View, Text, StyleSheet,SafeAreaView, Pressable } from 'react-native';
-import { PageHeader } from '../components/PageHeader';
-import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import {
   useAudioRecorder,
   AudioModule,
@@ -14,9 +11,8 @@ import {
 } from 'expo-audio';
 import * as FileSystem from 'expo-file-system';
 
-const Tab = createMaterialTopTabNavigator();
+export const RecordAudio = () => {
 
-function RecordPage() {
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(audioRecorder);
   const player = useAudioPlayer(audioSource);
@@ -45,13 +41,9 @@ function RecordPage() {
       
     }
   }
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <PageHeader title="Audio Recorder" onBack={() => navigation.goBack()} />
-      <Tab.Navigator>
-        <Tab.Screen name="Record" component={RecordPage} />
-        <Tab.Screen name="Saved Recordings" component={SavedRecords} />
-      </Tab.Navigator>
+    <SafeAreaView>
       <View style={styles.recordingButtonContainer}>
           {/* <RecordingIcon color='#F87171' height={200} width={200} /> */}
           <Pressable
@@ -77,25 +69,8 @@ function RecordPage() {
             </View>
           </Pressable>
       </View>
-          <View>
-            
-          </View>
     </SafeAreaView>
   )
-}
-
-function SavedRecords() {
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <View>
-        <Text>Saved Recordings will be displayed here.</Text>
-      </View>
-    </SafeAreaView>
-  )
-}
-
-export const RecordingPage = ({ navigation }) => {
-  return RecordingPage();
 }
 
 const styles = StyleSheet.create({
