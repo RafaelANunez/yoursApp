@@ -13,7 +13,9 @@ import { PageHeader } from '../components/PageHeader';
 import { JournalTemplateModal } from '../components/JournalTemplateModal';
 import { JournalEntryForm } from '../components/JournalEntryForm';
 import { IncidentReportForm } from '../components/IncidentReportForm';
+// Import LocationPinIcon (assuming it's in Icons.js)
 import { JournalIcon, EditIcon, DeleteIcon } from '../components/Icons';
+import { Video, Audio } from 'expo-av'; // Added for video/audio playback
 
 // Helper function to get mood emoji from a saved key
 const getMoodEmoji = (moodKey) => {

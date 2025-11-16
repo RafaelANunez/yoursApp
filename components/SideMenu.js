@@ -1,5 +1,7 @@
 import React from 'react'; // Removed useEffect and useState
 import { View, Text, Modal, TouchableOpacity, StyleSheet, Pressable, Image } from 'react-native';
+// Removed AsyncStorage, as AuthContext handles it
+import { useAuth } from '../context/AuthContext'; // IMPORTED: To get user and logout function
 import { CloseIcon, ContactIcon, EyeOffIcon } from './Icons';
 
 export const SideMenu = ({ isOpen, onClose, onNavigate }) => {
