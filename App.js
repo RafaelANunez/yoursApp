@@ -83,8 +83,6 @@ export default function App() {
  // --- Initialize geofencing and push notifications ---
   useEffect(() => {
     const initializeGeofencing = async () => {
-
-
       try {
         const token = await registerForPushNotifications();
         if (token) {
@@ -494,6 +492,7 @@ function AppContent() {
                 <Stack.Screen name="TrackAFriend" component={TrackAFriendPage} />
                 <Stack.Screen name="TrackingDetail" component={TrackingDetailPage} />
                 <Stack.Screen name="LocationHistory" component={LocationHistoryPage} />
+                <Stack.Screen name="CreateGeofence" component={CreateGeofencePage} />
               </>
             ) : (
               <>
