@@ -1,6 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { PageHeader } from '../components/PageHeader';
+import { useAuth } from '../context/AuthContext';
+import * as Notifications from 'expo-notifications';
 
 export const SettingsPage = ({ onBack, setCurrentPage }) => (
   <View style={styles.fullPage}>
@@ -19,6 +21,7 @@ export const SettingsPage = ({ onBack, setCurrentPage }) => (
 const styles = StyleSheet.create({
     fullPage: {
         flex: 1,
+        backgroundColor: '#FFF8F8', 
     },
     pageContainer: {
         flex: 1,
@@ -35,4 +38,12 @@ const styles = StyleSheet.create({
         textAlign: 'center',
         minWidth: 200,
     },
+    helperText: {
+        fontSize: 14,
+        color: '#6B7280',
+        textAlign: 'left',
+        width: '100%',
+        marginBottom: 25,
+        paddingHorizontal: 4,
+    }
 });

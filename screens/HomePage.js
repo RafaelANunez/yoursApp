@@ -7,6 +7,70 @@ const PageContainer = ({ children }) => (
 
 export const HomePage = ({ onFakeCall, screenHoldEnabled, screenHoldDuration, onNavigateToJournal }) => {
   const pressTimeout = useRef(null);
+  const translateY = useSharedValue(0);
+
+  // Parameter listening effect
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+        if (route.params?.triggerFakeCall) {
+            navigation.setParams({ triggerFakeCall: undefined });
+            if (onFakeCall) onFakeCall();
+        } 
+        else if (route.params?.triggerSudoku) {
+             navigation.setParams({ triggerSudoku: undefined });
+             if (onTriggerSudoku) onTriggerSudoku();
+        }
+    });
+
+    return unsubscribe;
+  }, [navigation, route, onFakeCall, onTriggerSudoku]);
+
+  // Animation for the swipe indicator
+  useEffect(() => {
+    translateY.value = withRepeat(
+      withSequence(
+        withTiming(-10, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: 1500, easing: Easing.inOut(Easing.ease) })
+      ),
+      -1, // Infinite repeat
+      true // Reverse animation on repeat
+    );
+  }, []);
+
+  const animatedIndicatorStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateY: translateY.value }],
+    };
+  });
+
+  // --- FIX: Separate navigation function ---
+  const handleSwipeUp = () => {
+    if (navigation) {
+      navigation.navigate('SecondaryHome');
+    }
+  };
+
+  const swipeUpGesture = Gesture.Fling()
+    .direction(Directions.UP)
+    .onEnd(() => {
+      'worklet'; // Explicitly mark as running on UI thread
+      runOnJS(handleSwipeUp)(); // Explicitly call the JS function back on the JS thread
+    });
+  // ----------------------------------------
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        return gestureState.x0 < 50 && gestureState.dx > 10;
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        if (gestureState.dx > 50 && onOpenMenu) {
+          onOpenMenu();
+        }
+      },
+      onPanResponderTerminationRequest: () => true,
+    })
+  ).current;
 
   const handlePressIn = () => {
     if (screenHoldEnabled) {

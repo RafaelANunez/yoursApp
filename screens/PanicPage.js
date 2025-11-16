@@ -5,8 +5,9 @@ import * as SMS from 'expo-sms';
 import { useEmergencyContacts } from '../context/EmergencyContactsContext';
 import { MenuIcon } from '../components/Icons';
 
-export const PanicPage = ({ onBack }) => {
+export const PanicPage = ({ navigation }) => {
   const { contacts } = useEmergencyContacts();
+  const [pressDuration, setPressDuration] = useState(DEFAULT_PANIC_DURATION); // ADDED state
   const pressTimeout = useRef(null);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const waveAnim = useRef(new Animated.Value(0)).current;
@@ -41,7 +42,7 @@ export const PanicPage = ({ onBack }) => {
     wavePulseAnimation.start();
     pressTimeout.current = setTimeout(() => {
       triggerPanicAlert();
-    }, 3000); // 3 seconds
+    }, pressDuration); // USE DYNAMIC DURATION
   };
 
   const handlePressOut = () => {

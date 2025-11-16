@@ -1,8 +1,38 @@
+import 'react-native-gesture-handler';
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, SafeAreaView, StatusBar, TouchableOpacity, Text } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  SafeAreaView,
+  StatusBar,
+  TouchableOpacity,
+  Text,
+  Alert,
+} from 'react-native';
+import { NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { VolumeManager } from 'react-native-volume-manager';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
 import { AppHeader } from './components/AppHeader';
 import { SideMenu } from './components/SideMenu';
+
+// --- CONTEXT PROVIDERS ---
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { JournalProvider } from './context/JournalContext';
+import { EmergencyContactsProvider } from './context/EmergencyContactsContext';
+import { AutofillProvider } from './context/AutofillContext';
+
+import { JournalIcon, AlertIcon, TimerIcon, SettingsIcon } from './components/Icons';
+
+// Login/Signup Screens
+import LoginScreen from './screens/LoginScreen';
+import SignupScreen from './screens/SignupScreen';
+
+// Core App Screens
 import { HomePage } from './screens/HomePage';
+import SecondaryHomeScreen from './screens/SecondaryHomeScreen';
 import { JournalPage } from './screens/JournalPage';
 import { PanicPage } from './screens/PanicPage';
 import { TimerPage } from './screens/TimerPage';
@@ -22,11 +52,27 @@ import BackupAndRestorePage from './screens/BackupAndRestorePage';
 
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState('Home');
+  return (
+    <AuthProvider>
+      <AutofillProvider>
+        <EmergencyContactsProvider>
+          <JournalProvider>
+            <AppContent />
+          </JournalProvider>
+        </EmergencyContactsProvider>
+      </AutofillProvider>
+    </AuthProvider>
+  );
+}
+
+function AppContent() {
+  const { user, isLoggedIn, isLoading } = useAuth();
+  const navigationRef = useNavigationContainerRef();
+
+  // --- App State ---
   const [isMenuOpen, setMenuOpen] = useState(false);
   const [isFakeCallActive, setFakeCallActive] = useState(false);
   const [showSudoku, setShowSudoku] = useState(false);
-  const [isCheckingSettings, setIsCheckingSettings] = useState(true);
   const [twoFingerTriggerEnabled, setTwoFingerTriggerEnabled] = useState(false);
   const [isEmergencyMode, setIsEmergencyMode] = useState(false);
   const twoFingerTimer = useRef(null);
@@ -86,6 +132,9 @@ export default function App() {
       if (!isVolumeHoldEnabledNow || isFakeCallActiveNow) return;
 
       const currentVolume = result.volume;
+      const isVolumeUpPress =
+        (lastVolume.current !== null && currentVolume > lastVolume.current) ||
+        (currentVolume === 1.0 && lastVolume.current === 1.0);
 
       // *** THIS IS THE FIX ***
       // Condition to start the timer:
@@ -143,20 +192,47 @@ export default function App() {
   };
 
 
-  const checkDiscreetModeSettings = async () => {
+  const checkDiscreetModeSettings = async (email) => {
     try {
+      const keys = [
+        `@${email}_discreet_mode_enabled`,
+        `@${email}_sudoku_screen_enabled`,
+        `@${email}_two_finger_trigger_enabled`,
+      ];
       const [discreetMode, sudokuScreen, twoFinger] = await Promise.all([
-        AsyncStorage.getItem('@discreet_mode_enabled'),
-        AsyncStorage.getItem('@sudoku_screen_enabled'),
-        AsyncStorage.getItem('@two_finger_trigger_enabled'),
+        AsyncStorage.getItem(keys[0]),
+        AsyncStorage.getItem(keys[1]),
+        AsyncStorage.getItem(keys[2]),
       ]);
       if (discreetMode === 'true' && sudokuScreen === 'true') {
         setShowSudoku(true);
+      } else {
+        setShowSudoku(false); 
       }
       setTwoFingerTriggerEnabled(twoFinger === 'true');
     } catch (error) {
       console.error('Error checking discreet mode settings:', error);
     }
+  };
+  
+  const onSaveFakeCallSettings = async (email, newSettings) => {
+     try {
+        await AsyncStorage.multiSet([
+            [`@${email}_fake_call_caller_name`, newSettings.callerName],
+            [`@${email}_fake_call_screen_hold_enabled`, String(newSettings.screenHoldEnabled)],
+            [`@${email}_fake_call_volume_hold_enabled`, String(newSettings.volumeHoldEnabled)],
+            [`@${email}_fake_call_screen_hold_duration`, String(newSettings.screenHoldDuration)],
+            [`@${email}_fake_call_volume_hold_duration`, String(newSettings.volumeHoldDuration)],
+        ]);
+        setCallerName(newSettings.callerName);
+        setScreenHoldEnabled(newSettings.screenHoldEnabled);
+        setVolumeHoldEnabled(newSettings.volumeHoldEnabled);
+        setScreenHoldDuration(newSettings.screenHoldDuration);
+        setVolumeHoldDuration(newSettings.volumeHoldDuration);
+     } catch (error) {
+        console.error("Failed to save fake call settings", error);
+        Alert.alert('Error', 'Failed to save settings.');
+     }
   };
 
   const handleBypassSuccess = () => {
@@ -164,7 +240,7 @@ export default function App() {
     setIsEmergencyMode(false);
   };
 
-  const onTouchStart = (e) => {
+  const onTouchStart = e => {
     if (!twoFingerTriggerEnabled || showSudoku) return;
     touchCount.current = e.nativeEvent.touches.length;
     if (touchCount.current === 2) {
@@ -183,7 +259,7 @@ export default function App() {
     }
   };
 
-  const onTouchMove = (e) => {
+  const onTouchMove = e => {
     if (!twoFingerTriggerEnabled || !twoFingerTimer.current) return;
     const currentTouches = e.nativeEvent.touches;
     if (currentTouches.length !== 2) {
@@ -206,7 +282,7 @@ export default function App() {
     }
   };
 
-  const onTouchEnd = (e) => {
+  const onTouchEnd = e => {
     if (!twoFingerTriggerEnabled) return;
     if (twoFingerTimer.current) {
       clearTimeout(twoFingerTimer.current);
@@ -334,9 +410,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF8F8',
   },
   loadingContainer: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  touchContainer: {
+    flex: 1,
   },
   contentArea: {
     flex: 1,
