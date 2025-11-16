@@ -1,31 +1,11 @@
-import React, { useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Platform, Pressable, PanResponder } from 'react-native';
-import { GestureDetector, Gesture, Directions } from 'react-native-gesture-handler';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withRepeat,
-  withTiming,
-  withSequence,
-  Easing,
-  runOnJS, // <--- IMPORT THIS explicitly
-} from 'react-native-reanimated';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import React, { useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ImageBackground, Platform, Pressable } from 'react-native';
 
 const PageContainer = ({ children }) => (
     <View style={styles.pageContainer}>{children}</View>
 );
 
-export const HomePage = ({ 
-  onFakeCall, 
-  screenHoldEnabled, 
-  screenHoldDuration, 
-  onNavigateToJournal, 
-  onOpenMenu, 
-  navigation,
-  route,
-  onTriggerSudoku 
-}) => {
+export const HomePage = ({ onFakeCall, screenHoldEnabled, screenHoldDuration, onNavigateToJournal }) => {
   const pressTimeout = useRef(null);
   const translateY = useSharedValue(0);
 
@@ -96,7 +76,7 @@ export const HomePage = ({
     if (screenHoldEnabled) {
       pressTimeout.current = setTimeout(() => {
         onFakeCall();
-      }, screenHoldDuration * 1000);
+      }, screenHoldDuration * 1000); // Convert seconds to ms
     }
   };
 
@@ -107,46 +87,36 @@ export const HomePage = ({
   };
 
   return (
-    <GestureDetector gesture={swipeUpGesture}>
-        <View style={{ flex: 1 }} {...panResponder.panHandlers}>
-            <ImageBackground
-                source={require('../assets/logo version1.png')}
-                style={styles.backgroundImage}
-                imageStyle={styles.backgroundImageStyle}
-            >
-                <TouchableOpacity
-                style={{ flex: 1 }}
-                onPressIn={handlePressIn}
-                onPressOut={handlePressOut}
-                activeOpacity={1}
-                >
-                <PageContainer>
-                    <Text style={styles.homeTitle}>Welcome to Yours</Text>
-                    <Text style={styles.homeSubtitle}>You are in a safe space.</Text>
-                    <Pressable
-                    onPress={onNavigateToJournal}
-                    style={({ pressed }) => [
-                        styles.journalButton,
-                        pressed && styles.journalButtonPressed
-                    ]}
-                    >
-                    {({ pressed }) => (
-                        <Text style={[styles.journalButtonText, pressed && styles.journalButtonTextPressed]}>
-                        Go to Journal
-                        </Text>
-                    )}
-                    </Pressable>
-                </PageContainer>
-                </TouchableOpacity>
-            </ImageBackground>
-
-            {/* Animated Swipe Up Indicator */}
-            <Animated.View style={[styles.swipeIndicatorContainer, animatedIndicatorStyle]} pointerEvents="none">
-                <MaterialCommunityIcons name="chevron-double-up" size={24} color="#CD5F66" />
-                <Text style={styles.swipeIndicatorText}>Swipe up for more</Text>
-            </Animated.View>
-        </View>
-    </GestureDetector>
+    <ImageBackground
+      source={require('../assets/logo version1.png')}
+      style={styles.backgroundImage}
+      imageStyle={styles.backgroundImageStyle}
+    >
+      <TouchableOpacity
+        style={{ flex: 1 }}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={1}
+      >
+        <PageContainer>
+          <Text style={styles.homeTitle}>Welcome to Yours</Text>
+          <Text style={styles.homeSubtitle}>You are in a safe space.</Text>
+          <Pressable
+            onPress={onNavigateToJournal}
+            style={({ pressed }) => [
+              styles.journalButton,
+              pressed && styles.journalButtonPressed
+            ]}
+          >
+            {({ pressed }) => (
+              <Text style={[styles.journalButtonText, pressed && styles.journalButtonTextPressed]}>
+                Go to Journal
+              </Text>
+            )}
+          </Pressable>
+        </PageContainer>
+      </TouchableOpacity>
+    </ImageBackground>
   );
 };
 
@@ -200,20 +170,5 @@ const styles = StyleSheet.create({
       },
       journalButtonTextPressed: {
         color: 'white',
-      },
-      swipeIndicatorContainer: {
-        position: 'absolute',
-        bottom: 40,
-        alignSelf: 'center',
-        alignItems: 'center',
-        justifyContent: 'center',
-        opacity: 0.8,
-        zIndex: 10,
-      },
-      swipeIndicatorText: {
-        color: '#CD5F66',
-        fontSize: 12,
-        marginTop: -2,
-        opacity: 0.8,
       },
 });

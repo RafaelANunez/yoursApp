@@ -1,12 +1,9 @@
-import React, { useRef, useEffect, useState } from 'react'; // ADDED useEffect, useState
+import React, { useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert, Animated, Image } from 'react-native';
 import * as Location from 'expo-location';
 import * as SMS from 'expo-sms';
 import { useEmergencyContacts } from '../context/EmergencyContactsContext';
 import { MenuIcon } from '../components/Icons';
-import AsyncStorage from '@react-native-async-storage/async-storage'; // ADDED AsyncStorage
-
-const DEFAULT_PANIC_DURATION = 3000; // 3 seconds in ms
 
 export const PanicPage = ({ navigation }) => {
   const { contacts } = useEmergencyContacts();
@@ -14,26 +11,6 @@ export const PanicPage = ({ navigation }) => {
   const pressTimeout = useRef(null);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const waveAnim = useRef(new Animated.Value(0)).current;
-
-  // ADDED effect to load setting
-  useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        // Fetch the duration (stored in seconds) and convert to milliseconds
-        const duration = await AsyncStorage.getItem('@panic_press_duration');
-        if (duration !== null) {
-          // Use stored value * 1000, fall back to default if parsing fails
-          const loadedDuration = parseInt(duration, 10);
-          if (!isNaN(loadedDuration) && loadedDuration > 0) {
-            setPressDuration(loadedDuration * 1000);
-          }
-        }
-      } catch (e) {
-        console.error("Failed to load panic press duration:", e);
-      }
-    };
-    loadSettings();
-  }, []); //
 
   // Animation for the button itself (slight pulse)
   const buttonPulseAnimation = Animated.loop(
@@ -130,14 +107,11 @@ export const PanicPage = ({ navigation }) => {
       outputRange: [startOpacity, 0],
     }),
   });
-  
-  // Calculate duration in seconds for display, defaulting to 3
-  const displayDuration = Math.round(pressDuration / 1000) || 3;
 
   return (
     <View style={styles.fullPage}>
       <View style={styles.header}>
-       <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={onBack} style={styles.headerIcon}>
           <MenuIcon color="#C70039" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Emergency</Text>
@@ -167,8 +141,7 @@ export const PanicPage = ({ navigation }) => {
                 activeOpacity={0.8}
               >
                 <Text style={styles.sosButtonText}>SOS</Text>
-                {/* USE DYNAMIC DURATION FOR DISPLAY */}
-                <Text style={styles.sosButtonSubtext}>Press for {displayDuration} seconds</Text> 
+                <Text style={styles.sosButtonSubtext}>Press for 3 seconds</Text>
               </TouchableOpacity>
             </Animated.View>
           </View>

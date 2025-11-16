@@ -16,11 +16,6 @@ import {
   KeypadIcon,
 } from '../components/Icons';
 
-// Ringtone keys and default asset
-const RINGTONE_URI_KEY = '@fake_call_ringtone_uri'; 
-const DEFAULT_RINGTONE_ASSET = require('../assets/sounds/ringtone.mp3'); 
-const DEFAULT_RINGTONE_PATH = '../assets/sounds/ringtone.mp3';
-
 // In-call action button component
 const InCallButton = ({ icon, text, onPress, isActive }) => (
   <TouchableOpacity style={styles.inCallButton} onPress={onPress}>
@@ -56,8 +51,8 @@ const Keypad = ({ onKeyPress, onHide }) => {
   );
 };
 
-export const FakeCallScreen = ({ onEndCall, callerName }) => {
-  const [callState, setCallState] = useState('incoming');
+export const FakeCallScreen = ({ onEndCall, callerName }) => { // Receive callerName as a prop
+  const [callState, setCallState] = useState('incoming'); // 'incoming', 'answered', 'ended'
   const [timer, setTimer] = useState(0);
   const [isKeypadVisible, setKeypadVisible] = useState(false);
   const [keypadInput, setKeypadInput] = useState('');
@@ -308,10 +303,7 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
 
   const renderEndedCall = () => (
     <View style={[styles.container, { backgroundColor: '#111' }]}>
-      <View style={styles.callerInfoContainer}>
-        <Text style={styles.callerName}>{callerName}</Text>
-        <Text style={[styles.callerSubtext, { color: 'red', marginTop: 10, fontSize: 18 }]}>Call ended</Text>
-      </View>
+      <View style={styles.callerInfoContainer}><Text style={styles.callerName}>{callerName}</Text><Text style={[styles.callerSubtext, { color: 'red', marginTop: 10, fontSize: 18 }]}>Call ended</Text></View>
     </View>
   );
 
