@@ -13,10 +13,22 @@ import { PageHeader } from '../components/PageHeader';
 import { JournalTemplateModal } from '../components/JournalTemplateModal';
 import { JournalEntryForm } from '../components/JournalEntryForm';
 import { IncidentReportForm } from '../components/IncidentReportForm';
+// Import LocationPinIcon (assuming it's in Icons.js)
 import { JournalIcon, EditIcon, DeleteIcon } from '../components/Icons';
 import { Video, Audio } from 'expo-av'; // Added for video/audio playback
 
-// Use { navigation } from props instead of { onBack }
+// Helper function to get mood emoji from a saved key
+const getMoodEmoji = (moodKey) => {
+  const moodMap = {
+    'rad': '😁',
+    'good': '😊',
+    'meh': '😐',
+    'bad': '😟',
+    'awful': '😢',
+  };
+  return moodMap[moodKey] || null; // Return the emoji or null
+};
+
 export const JournalPage = ({ navigation }) => {
   const { entries, isLoading, addEntry, updateEntry, deleteEntry } = useJournal();
   const [formVisible, setFormVisible] = useState(false);
@@ -25,10 +37,10 @@ export const JournalPage = ({ navigation }) => {
   const [editingEntry, setEditingEntry] = useState(null);
   const [templateData, setTemplateData] = useState(null);
   
-  // --- New State for Expanded Item ---
+  // State for Expanded Item
   const [expandedEntryId, setExpandedEntryId] = useState(null);
   
-  // --- Refs and Effects for Audio Playback ---
+  // Refs and Effects for Audio Playback
   const soundRef = useRef(new Audio.Sound());
 
   useEffect(() => {
@@ -113,6 +125,7 @@ export const JournalPage = ({ navigation }) => {
   const handleSaveEntry = async (entryData) => {
     try {
       if (editingEntry) {
+        // Pass all data, including new tags, to updateEntry
         await updateEntry(editingEntry.id, entryData);
       } else {
         await addEntry(entryData);
@@ -150,12 +163,12 @@ export const JournalPage = ({ navigation }) => {
       return colors[severity] || 'white';
   }
 
-  // --- New Function to Toggle Expanded State ---
+  // Function to Toggle Expanded State
   const handleToggleExpand = (itemId) => {
     setExpandedEntryId(prevId => (prevId === itemId ? null : itemId));
   };
 
-  // --- New Function to Play Audio ---
+  // Function to Play Audio
   const playSound = async (uri) => {
     try {
       await soundRef.current.unloadAsync(); // Unload previous sound
@@ -167,10 +180,50 @@ export const JournalPage = ({ navigation }) => {
     }
   };
 
+  // --- NEW: Helper function to render tags ---
+  const renderTags = (item) => {
+    const { mood, location, activityTags } = item;
+    const moodEmoji = getMoodEmoji(mood);
+    const hasLocation = location && location.trim().length > 0;
+    const hasActivities = activityTags && activityTags.length > 0;
+
+    // Don't render the container if there are no tags at all
+    if (!moodEmoji && !hasLocation && !hasActivities) {
+      return null; 
+    }
+
+    return (
+      <View style={styles.tagsContainer}>
+        {/* Mood Emoji */}
+        {moodEmoji && (
+          <Text style={styles.moodTag}>{moodEmoji}</Text>
+        )}
+
+        {/* Location */}
+        {hasLocation && (
+          <View style={styles.tagChip}>
+            {/* If you don't have LocationPinIcon, you can remove this Icon component */}
+            
+            <Text style={styles.tagText}>{location}</Text>
+          </View>
+        )}
+
+        {/* Activity Tags */}
+        {hasActivities && activityTags.map((tag, index) => (
+          <View key={index} style={styles.tagChip}>
+            {/* You could add icons here later based on tag name */}
+            <Text style={styles.tagText}>{tag}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
+  // --- END NEW FUNCTION ---
+
+
   if (isLoading) {
     return (
       <View style={styles.fullPage}>
-        {/* Use navigation.goBack() for the onBack prop */}
         <PageHeader title="My Journal" onBack={() => navigation.goBack()} />
         <View style={styles.loadingContainer}>
           <Text>Loading journal...</Text>
@@ -180,11 +233,11 @@ export const JournalPage = ({ navigation }) => {
   }
 
   const renderJournalItem = ({ item }) => {
-    // --- Check if item is expanded ---
+    // Check if item is expanded
     const isExpanded = item.id === expandedEntryId;
 
     return (
-      // --- Made entire item tappable ---
+      // Made entire item tappable
       <TouchableOpacity
         style={[styles.journalItem, {backgroundColor: getSeverityColor(item.severity)}]}
         onPress={() => handleToggleExpand(item.id)}
@@ -200,15 +253,15 @@ export const JournalPage = ({ navigation }) => {
                 <Text style={styles.incidentDetail}><Text style={{fontWeight: 'bold'}}>Person: </Text>{item.personName} ({item.relationship})</Text>
                 <Text style={styles.incidentDetail}><Text style={{fontWeight: 'bold'}}>Location: </Text>{item.location}</Text>
                 <Text style={styles.incidentDetail}><Text style={{fontWeight: 'bold'}}>Incident: </Text>{item.incidentType}</Text>
-                {/* --- Expandable description --- */}
+                {/* Expandable description */}
                 <Text style={styles.journalItemNotes} numberOfLines={isExpanded ? undefined : 3}>{item.description}</Text>
               </>
            ) : (
-              // --- Expandable notes ---
+              // Expandable notes
               <Text style={styles.journalItemNotes} numberOfLines={isExpanded ? undefined : 3}>{item.notes}</Text>
            )}
 
-           {/* --- New Block: Render Attachments if Expanded --- */}
+           {/* Block: Render Attachments if Expanded */}
            {isExpanded && item.attachments && (
              <View style={styles.attachmentContainer}>
                {item.attachments.map((att, index) => {
@@ -239,7 +292,11 @@ export const JournalPage = ({ navigation }) => {
                })}
              </View>
            )}
-           {/* --- End Attachments --- */}
+           {/* End Attachments */}
+
+           {/* --- CALL renderTags FUNCTION --- */}
+           {/* Only show tags if the item is NOT expanded, like in the image */}
+           {!isExpanded && renderTags(item)}
 
         </View>
         <View style={styles.journalActions}>
@@ -286,7 +343,7 @@ export const JournalPage = ({ navigation }) => {
                 <Text style={styles.sectionHeader}>{title}</Text>
             )}
             showsVerticalScrollIndicator={false}
-            // --- Add this to make sure expanded item doesn't get clipped ---
+            // Add this to make sure expanded item doesn't get clipped
             extraData={expandedEntryId}
           />
         )}
@@ -302,6 +359,7 @@ export const JournalPage = ({ navigation }) => {
         onSelectTemplate={handleSelectTemplate}
       />
 
+      {/* Pass all props to the form */}
       <JournalEntryForm
         visible={formVisible}
         entry={editingEntry}
@@ -422,7 +480,7 @@ const styles = StyleSheet.create({
         fontSize: 30,
         lineHeight: 34,
       },
-    // --- New Styles for Attachments ---
+    // Styles for Attachments
     attachmentContainer: {
       marginTop: 12,
     },
@@ -450,5 +508,38 @@ const styles = StyleSheet.create({
       color: 'white',
       fontWeight: 'bold',
       fontSize: 14,
+    },
+
+    // --- NEW STYLES FOR TAGS ---
+    tagsContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      marginTop: 10,
+      borderTopWidth: 1, // Adds the separator line
+      borderTopColor: 'rgba(0, 0, 0, 0.1)', // Light separator
+      paddingTop: 8,
+    },
+    moodTag: {
+      fontSize: 20,
+      marginRight: 8,
+      // The emoji itself provides the color
+    },
+    tagChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#F3F4F6', // Light gray background
+      borderRadius: 16,
+      paddingVertical: 4,
+      paddingHorizontal: 10,
+      marginRight: 6,
+      marginBottom: 6,
+    },
+    tagText: {
+      fontSize: 12,
+      color: '#4B5563',
+      marginLeft: 4,
+      fontWeight: '500',
+      textTransform: 'capitalize', // Show tags like 'Family' or 'Friends'
     },
 });
