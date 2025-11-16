@@ -4,6 +4,8 @@ import { Audio } from 'expo-av';
 import * as Location from 'expo-location';
 import * as SMS from 'expo-sms';
 import { useEmergencyContacts } from '../context/EmergencyContactsContext';
+import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage'; 
 import {
   PhoneIcon,
   RecordIcon,
@@ -13,6 +15,11 @@ import {
   MuteIcon,
   KeypadIcon,
 } from '../components/Icons';
+
+// Ringtone keys and default asset
+const RINGTONE_URI_KEY = '@fake_call_ringtone_uri'; 
+const DEFAULT_RINGTONE_ASSET = require('../assets/sounds/ringtone.mp3'); 
+const DEFAULT_RINGTONE_PATH = '../assets/sounds/ringtone.mp3';
 
 // In-call action button component
 const InCallButton = ({ icon, text, onPress, isActive }) => (
@@ -49,10 +56,9 @@ const Keypad = ({ onKeyPress, onHide }) => {
   );
 };
 
-export const FakeCallScreen = ({ onEndCall, callerName }) => { // Receive callerName as a prop
-  const [callState, setCallState] = useState('incoming'); // 'incoming', 'answered', 'ended'
+export const FakeCallScreen = ({ onEndCall, callerName }) => {
+  const [callState, setCallState] = useState('incoming');
   const [timer, setTimer] = useState(0);
-  const [sound, setSound] = useState();
   const [isKeypadVisible, setKeypadVisible] = useState(false);
   const [keypadInput, setKeypadInput] = useState('');
   const [activeButtons, setActiveButtons] = useState({
@@ -62,25 +68,43 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => { // Receive caller
     hold: false,
     bluetooth: false,
   });
+  // State for dynamically loaded ringtone source
+  const [ringtoneSource, setRingtoneSource] = useState(DEFAULT_RINGTONE_ASSET);
+  // State to track if the ringtone setting has been loaded
+  const [isRingtoneSettingsLoaded, setIsRingtoneSettingsLoaded] = useState(false); 
 
   const { contacts } = useEmergencyContacts();
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const soundRef = useRef(null);
+  const navigation = useNavigation();
 
-  // Pulsating animation for incoming call buttons
+  // Load custom ringtone URI from AsyncStorage on mount
+  useEffect(() => {
+    const loadRingtone = async () => {
+        try {
+            const storedUri = await AsyncStorage.getItem(RINGTONE_URI_KEY);
+            if (storedUri && storedUri !== DEFAULT_RINGTONE_PATH) {
+                setRingtoneSource({ uri: storedUri });
+            } else {
+                setRingtoneSource(DEFAULT_RINGTONE_ASSET);
+            }
+        } catch (e) {
+            console.error("Failed to load ringtone URI:", e);
+            setRingtoneSource(DEFAULT_RINGTONE_ASSET);
+        } finally {
+            setIsRingtoneSettingsLoaded(true); 
+        }
+    };
+    loadRingtone();
+  }, []);
+
+  // Pulsating animation for incoming call
   useEffect(() => {
     if (callState === 'incoming') {
       const animation = Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.1,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 800,
-            useNativeDriver: true,
-          }),
+          Animated.timing(pulseAnim, { toValue: 1.1, duration: 800, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
         ])
       );
       animation.start();
@@ -88,50 +112,116 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => { // Receive caller
     }
   }, [callState, pulseAnim]);
 
-  // Secret SOS code trigger
+  // Secret SOS trigger
   useEffect(() => {
     if (keypadInput.endsWith('505')) {
       triggerPanicAlert();
-      setKeypadInput(''); // Reset input after trigger
+      setKeypadInput('');
       Alert.alert('Panic Activated', 'Your location has been sent to your emergency contacts.');
     }
   }, [keypadInput]);
 
-  // Main effect for call state changes (ringtone, timer, etc.)
-  useEffect(() => {
-    let interval;
+  // FIX: Stable stopRingtone to avoid race conditions and null errors, and accept ref
+  const stopRingtone = async (ref) => { // Ref is passed in
+    Vibration.cancel(); 
+    const soundToStop = ref.current; // Capture the object locally
     
-    async function setupAudioAndVibration() {
+    // Crucial step: Clear the ref *before* async operations to prevent re-entry/double-stop
+    ref.current = null; 
+
+    if (soundToStop) {
       try {
-        await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+        const status = await soundToStop.getStatusAsync();
+        if (status.isLoaded) {
+            // Check if sound is actually playing or loaded before unloading
+            if (status.isPlaying) {
+                await soundToStop.stopAsync();
+            }
+            // Always unload to free resources and prevent echo on next play
+            await soundToStop.unloadAsync(); 
+        }
+      } catch (e) {
+        // Log the error but don't halt execution
+        console.warn("Error during sound unload/stop:", e); 
+      }
+    }
+  };
+
+  // Main audio setup function
+  const setupAudioAndVibration = async () => {
+      // 1. Ensure any currently playing audio is STOPPED BEFORE starting a new one (prevents echo)
+      await stopRingtone(soundRef); 
+
+      try {
+        await Audio.setAudioModeAsync({ playsInSilentModeIOS: true, allowsRecordingIOS: false, staysActiveInBackground: false, shouldDuckAndroid: true });
+        
         const { sound } = await Audio.Sound.createAsync(
-          require('../assets/sounds/ringtone.mp3')
+          ringtoneSource
         );
-        setSound(sound);
+        
+        soundRef.current = sound;
         await sound.setIsLoopingAsync(true);
         await sound.playAsync();
         Vibration.vibrate([400, 1000], true);
       } catch (error) {
-        console.warn("Could not play ringtone. Make sure 'assets/sounds/ringtone.mp3' exists.", error);
+        console.warn("Could not play ringtone:", error);
+        stopRingtone(soundRef); 
       }
-    }
-    
+  };
+
+  // Main call logic (sound + timer)
+  useEffect(() => {
+    let interval;
+
     if (callState === 'answered') {
+      // Timer starts immediately after ringtone stop (handled by handleAccept)
       interval = setInterval(() => setTimer(prev => prev + 1), 1000);
     } else if (callState === 'ended') {
-      setTimeout(onEndCall, 2000);
+      // Call ended sequence
+      setTimeout(() => {
+        onEndCall?.();
+        try {
+          navigation.setParams({ triggerFakeCall: false, triggerSudoku: false });
+        } catch (e) {
+          console.warn('Could not reset navigation params', e);
+        }
+      }, 2000);
     } else if (callState === 'incoming') {
-      setupAudioAndVibration();
+      // Only attempt to play if settings are loaded
+      if (isRingtoneSettingsLoaded) { 
+          setupAudioAndVibration(); 
+      }
     }
 
+    // Cleanup: This is crucial for stopping the sound when the component unmounts
+    // or when callState changes, ensuring no background audio.
     return () => {
       clearInterval(interval);
-      Vibration.cancel();
-      if (sound) {
-        sound.unloadAsync();
-      }
+      stopRingtone(soundRef); 
     };
-  }, [callState]);
+  }, [callState, ringtoneSource, isRingtoneSettingsLoaded]);
+
+  // FIX: Handle Decline - Await stopRingtone for guaranteed audio stop before state change
+  const handleDecline = async () => { 
+    await stopRingtone(soundRef); 
+    setCallState('ended');
+  };
+
+  // FIX: Handle Accept - Await stopRingtone for guaranteed audio stop before state change
+  const handleAccept = async () => {
+    await stopRingtone(soundRef); 
+    setCallState('answered');
+  };
+
+  const toggleButton = (button) => {
+    setActiveButtons(prev => ({ ...prev, [button]: !prev[button] }));
+  };
+
+  const formatTime = () => {
+    const minutes = Math.floor(timer / 60).toString().padStart(2, '0');
+    const seconds = (timer % 60).toString().padStart(2, '0');
+    return `${minutes}:${seconds}`;
+  };
 
   const triggerPanicAlert = async () => {
     if (contacts.length === 0) {
@@ -146,7 +236,7 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => { // Receive caller
     try {
       let location = await Location.getCurrentPositionAsync({});
       const { latitude, longitude } = location.coords;
-      const message = `Emergency! I need help. My current location is: https://www.google.com/maps/search/?api=1&query=$${latitude},${longitude}`;
+      const message = `Emergency! I need help. My location: https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
       const recipients = contacts.map(c => c.phone);
       const isAvailable = await SMS.isAvailableAsync();
       if (isAvailable) {
@@ -155,34 +245,9 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => { // Receive caller
         Alert.alert('SMS Not Available', 'SMS is not available on this device.');
       }
     } catch (error) {
-      console.error("Failed to get location or send alert:", error);
-      Alert.alert('Error', 'Could not get your location or send SMS.');
+      console.error("Failed to send alert:", error);
+      Alert.alert('Error', 'Could not get location or send SMS.');
     }
-  };
-
-  const formatTime = () => {
-    const minutes = Math.floor(timer / 60).toString().padStart(2, '0');
-    const seconds = (timer % 60).toString().padStart(2, '0');
-    return `${minutes}:${seconds}`;
-  };
-
-  const stopRingtone = () => {
-    if (sound) sound.stopAsync();
-    Vibration.cancel();
-  };
-
-  const handleDecline = () => {
-    stopRingtone();
-    onEndCall();
-  };
-
-  const handleAccept = () => {
-    stopRingtone();
-    setCallState('answered');
-  };
-
-  const toggleButton = (button) => {
-    setActiveButtons(prev => ({ ...prev, [button]: !prev[button] }));
   };
 
   const renderIncomingCall = () => (
@@ -195,14 +260,14 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => { // Receive caller
       </View>
       <View style={styles.actionsContainer}>
         <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-            <TouchableOpacity style={[styles.callButton, styles.declineButton]} onPress={handleDecline}>
-              <PhoneIcon style={{ transform: [{ rotate: '135deg' }] }} />
-            </TouchableOpacity>
+          <TouchableOpacity style={[styles.callButton, styles.declineButton]} onPress={handleDecline}>
+            <PhoneIcon style={{ transform: [{ rotate: '135deg' }] }} />
+          </TouchableOpacity>
         </Animated.View>
         <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-            <TouchableOpacity style={[styles.callButton, styles.acceptButton]} onPress={handleAccept}>
-              <PhoneIcon />
-            </TouchableOpacity>
+          <TouchableOpacity style={[styles.callButton, styles.acceptButton]} onPress={handleAccept}>
+            <PhoneIcon />
+          </TouchableOpacity>
         </Animated.View>
       </View>
     </View>
@@ -234,7 +299,7 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => { // Receive caller
             </View>
           </>
         )}
-        <TouchableOpacity style={[styles.callButton, styles.declineButton, { marginTop: 30 }]} onPress={() => setCallState('ended')}>
+        <TouchableOpacity style={[styles.callButton, styles.declineButton, { marginTop: 30 }]} onPress={handleDecline}>
           <PhoneIcon style={{ transform: [{ rotate: '135deg' }] }} />
         </TouchableOpacity>
       </View>
@@ -243,7 +308,10 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => { // Receive caller
 
   const renderEndedCall = () => (
     <View style={[styles.container, { backgroundColor: '#111' }]}>
-      <View style={styles.callerInfoContainer}><Text style={styles.callerName}>{callerName}</Text><Text style={[styles.callerSubtext, { color: 'red', marginTop: 10, fontSize: 18 }]}>Call ended</Text></View>
+      <View style={styles.callerInfoContainer}>
+        <Text style={styles.callerName}>{callerName}</Text>
+        <Text style={[styles.callerSubtext, { color: 'red', marginTop: 10, fontSize: 18 }]}>Call ended</Text>
+      </View>
     </View>
   );
 
@@ -254,28 +322,28 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => { // Receive caller
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, justifyContent: 'space-between', paddingTop: 60, paddingBottom: 80 },
-    gradient: { backgroundColor: '#343a40' },
-    header: { alignItems: 'center' },
-    headerText: { color: 'white', fontSize: 18 },
-    callerInfoContainer: { alignItems: 'center', justifyContent: 'center', flex: 1 },
-    callerName: { fontSize: 38, color: 'white', fontWeight: '400' },
-    callerSubtext: { fontSize: 18, color: '#ccc', marginTop: 4 },
-    avatar: { width: 120, height: 120, borderRadius: 60, marginTop: 40 },
-    actionsContainer: { flexDirection: 'row', justifyContent: 'space-around', width: '100%' },
-    callButton: { width: 70, height: 70, borderRadius: 35, justifyContent: 'center', alignItems: 'center' },
-    declineButton: { backgroundColor: '#e63946' },
-    acceptButton: { backgroundColor: '#2a9d8f' },
-    inCallActions: { width: '100%', paddingHorizontal: 20, alignItems: 'center' },
-    inCallRow: { flexDirection: 'row', justifyContent: 'space-around', width: '100%', marginBottom: 20 },
-    inCallButton: { alignItems: 'center', width: 80 },
-    inCallIconContainer: { backgroundColor: 'rgba(255, 255, 255, 0.2)', width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },
-    inCallButtonActive: { backgroundColor: '#007bff' },
-    inCallButtonText: { color: 'white', marginTop: 8 },
-    keypadContainer: { width: '100%', alignItems: 'center' },
-    keypadGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', width: 300 },
-    keypadButton: { width: 80, height: 80, borderRadius: 40, margin: 10, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.2)' },
-    keypadButtonText: { color: 'white', fontSize: 32 },
-    keypadHideText: { color: 'white', fontSize: 18, marginTop: 20 },
-    keypadDisplay: { color: 'white', fontSize: 24, height: 30, marginTop: 10 },
+  container: { flex: 1, justifyContent: 'space-between', paddingTop: 60, paddingBottom: 80 },
+  gradient: { backgroundColor: '#343a40' },
+  header: { alignItems: 'center' },
+  headerText: { color: 'white', fontSize: 18 },
+  callerInfoContainer: { alignItems: 'center', justifyContent: 'center', flex: 1 },
+  callerName: { fontSize: 38, color: 'white', fontWeight: '400' },
+  callerSubtext: { fontSize: 18, color: '#ccc', marginTop: 4 },
+  avatar: { width: 120, height: 120, borderRadius: 60, marginTop: 40 },
+  actionsContainer: { flexDirection: 'row', justifyContent: 'space-around', width: '100%' },
+  callButton: { width: 70, height: 70, borderRadius: 35, justifyContent: 'center', alignItems: 'center' },
+  declineButton: { backgroundColor: '#e63946' },
+  acceptButton: { backgroundColor: '#2a9d8f' },
+  inCallActions: { width: '100%', paddingHorizontal: 20, alignItems: 'center' },
+  inCallRow: { flexDirection: 'row', justifyContent: 'space-around', width: '100%', marginBottom: 20 },
+  inCallButton: { alignItems: 'center', width: 80 },
+  inCallIconContainer: { backgroundColor: 'rgba(255, 255, 255, 0.2)', width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },
+  inCallButtonActive: { backgroundColor: '#007bff' },
+  inCallButtonText: { color: 'white', marginTop: 8 },
+  keypadContainer: { width: '100%', alignItems: 'center' },
+  keypadGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', width: 300 },
+  keypadButton: { width: 80, height: 80, borderRadius: 40, margin: 10, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.2)' },
+  keypadButtonText: { color: 'white', fontSize: 32 },
+  keypadHideText: { color: 'white', fontSize: 18, marginTop: 20 },
+  keypadDisplay: { color: 'white', fontSize: 24, height: 30, marginTop: 10 },
 });

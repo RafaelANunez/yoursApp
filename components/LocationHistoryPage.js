@@ -125,7 +125,8 @@ const TrashIcon = ({ color = '#EF4444' }) => (
   </Svg>
 );
 
-const LocationHistoryPage = ({ onBack }) => {
+// *** MODIFIED: Added navigation prop ***
+const LocationHistoryPage = ({ navigation }) => {
   // State management
   const [settings, setSettings] = useState(null);
   const [locationHistory, setLocationHistory] = useState([]);
@@ -423,7 +424,8 @@ const LocationHistoryPage = ({ onBack }) => {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          {/* *** MODIFIED: Use navigation.goBack() *** */}
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Location History</Text>
@@ -441,8 +443,9 @@ const LocationHistoryPage = ({ onBack }) => {
       <ScrollView style={styles.scrollView}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Text style={styles.backButtonText}>← Back</Text>
+          {/* *** MODIFIED: Use navigation.goBack() *** */}
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+             <Text style={styles.backButtonText}>← Back</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Location History</Text>
         </View>
@@ -530,12 +533,14 @@ const LocationHistoryPage = ({ onBack }) => {
               <TextInput
                 style={styles.dateInput}
                 placeholder="Start Date (YYYY-MM-DD)"
+                placeholderTextColor="#9CA3AF" // *** MODIFIED: Added placeholder color ***
                 value={customStartDate}
                 onChangeText={setCustomStartDate}
               />
               <TextInput
                 style={styles.dateInput}
                 placeholder="End Date (YYYY-MM-DD)"
+                placeholderTextColor="#9CA3AF" // *** MODIFIED: Added placeholder color ***
                 value={customEndDate}
                 onChangeText={setCustomEndDate}
               />
@@ -812,6 +817,7 @@ const LocationHistoryPage = ({ onBack }) => {
             <TextInput
               style={styles.labelInput}
               placeholder="Enter custom label"
+              placeholderTextColor="#9CA3AF" // *** MODIFIED: Added placeholder color ***
               value={labelInput}
               onChangeText={setLabelInput}
             />

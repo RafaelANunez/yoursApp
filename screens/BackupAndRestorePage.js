@@ -5,23 +5,46 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PageHeader } from '../components/PageHeader';
+import { useAuth } from '../context/AuthContext'; // IMPORTED: To get the current user
 
-const BackupAndRestorePage = ({ onBack }) => {
+// Use { navigation } from props
+const BackupAndRestorePage = ({ navigation }) => {
+  const { user } = useAuth(); // ADDED: Get the logged-in user
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
 
   const createBackup = async () => {
+    // ADDED: Check if user is logged in
+    if (!user?.email) {
+      return Alert.alert('Error', 'You must be logged in to create a backup.');
+    }
     setIsBackingUp(true);
     try {
       const allKeys = await AsyncStorage.getAllKeys();
-      const allData = await AsyncStorage.multiGet(allKeys);
+
+      // --- MODIFIED: Filter for user-specific keys ---
+      const userKeyPrefix = `@${user.email}_`;
+      const userCredsKey = `@user_creds_${user.email}`;
+      const userKeys = allKeys.filter(key =>
+        key.startsWith(userKeyPrefix) || key === userCredsKey
+      );
+
+      // ADDED: Check if there's anything to back up
+      if (userKeys.length === 0) {
+        setIsBackingUp(false); // Stop loading
+        return Alert.alert('No Data', 'There is no data to back up.');
+      }
+
+      // MODIFIED: Only get data for the current user
+      const allData = await AsyncStorage.multiGet(userKeys);
       const backupObject = allData.reduce((obj, [key, value]) => {
         obj[key] = value;
         return obj;
       }, {});
 
       const backupJson = JSON.stringify(backupObject, null, 2);
-      const fileName = `YoursApp_Backup_${new Date().toISOString().split('T')[0]}.json`;
+      // MODIFIED: Include user email in backup name for clarity
+      const fileName = `YoursApp_Backup_${user.email}_${new Date().toISOString().split('T')[0]}.json`;
       const fileUri = FileSystem.documentDirectory + fileName;
 
       await FileSystem.writeAsStringAsync(fileUri, backupJson);
@@ -43,6 +66,10 @@ const BackupAndRestorePage = ({ onBack }) => {
   };
 
   const restoreBackup = async () => {
+    // ADDED: Check if user is logged in
+    if (!user?.email) {
+      return Alert.alert('Error', 'You must be logged in to restore data.');
+    }
     setIsRestoring(true);
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -56,8 +83,30 @@ const BackupAndRestorePage = ({ onBack }) => {
         const backupJson = await FileSystem.readAsStringAsync(fileUri);
         const backupObject = JSON.parse(backupJson);
 
+        // --- MODIFIED: Filter keys to restore ---
+        const userKeyPrefix = `@${user.email}_`;
+        const userCredsKey = `@user_creds_${user.email}`;
+
         const keyValuePairs = Object.entries(backupObject);
-        await AsyncStorage.multiSet(keyValuePairs);
+        
+        // Filter the backup file to only include pairs relevant to the *current* user
+        const validPairs = keyValuePairs.filter(([key, value]) =>
+            key.startsWith(userKeyPrefix) || key === userCredsKey
+        );
+        
+        // ADDED: Check if the file contained any valid data
+        if (validPairs.length === 0) {
+           setIsRestoring(false); // Stop loading
+           return Alert.alert('Restore Failed', 'This backup file contains no data for the current user.');
+        }
+        
+        // ADDED: Warn if the file had other data (e.g., from a different user)
+        if (validPairs.length < keyValuePairs.length) {
+            Alert.alert('Warning', 'This backup file may contain data for a different user. Only data for the current user will be restored.');
+        }
+
+        // MODIFIED: Restore only the valid, user-specific data
+        await AsyncStorage.multiSet(validPairs); 
 
         Alert.alert(
           'Restore Complete',
@@ -75,7 +124,8 @@ const BackupAndRestorePage = ({ onBack }) => {
 
   return (
     <View style={styles.fullPage}>
-      <PageHeader title="Backup & Restore" onBack={onBack} />
+      {/* Use navigation.goBack() instead of onBack */}
+      <PageHeader title="Backup & Restore" onBack={() => navigation.goBack()} />
       <View style={styles.container}>
         <Text style={styles.description}>
           Create a backup of all your app data, including journal entries, contacts, and settings. You can save this file to your device, Google Drive, or send it via email.

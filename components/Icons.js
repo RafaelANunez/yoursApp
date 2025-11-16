@@ -1,6 +1,25 @@
 import React from 'react';
 import { View } from 'react-native';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
+import Ionicons from '@expo/vector-icons/Ionicons'; // <-- Make sure to import Ionicons
+
+// --- NEW Icons for Login/Signup ---
+// Added from the redesign
+
+export const UserIcon = (props) => (
+  <Ionicons name="person-outline" size={20} {...props} />
+);
+
+export const MailIcon = (props) => (
+  <Ionicons name="mail-outline" size={20} {...props} />
+);
+
+export const LockIcon = (props) => (
+  <Ionicons name="lock-closed-outline" size={20} {...props} />
+);
+
+// --- ORIGINAL Icons from your file ---
+// Kept for App.js and other components
 
 export const MenuIcon = ({ color = '#555' }) => (
   <View style={{ width: 24, height: 24, justifyContent: 'space-around' }}>
@@ -172,6 +191,7 @@ export const EyeOffIcon = ({ color = '#555' }) => (
   </Svg>
 );
 
+// --- Fake Call Icons ---
 export const RecordIcon = ({ color = '#000' }) => (
     <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
         <Circle cx="12" cy="12" r="10" stroke={color} strokeWidth="2"/>
