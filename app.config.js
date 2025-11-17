@@ -18,7 +18,10 @@ export default {
       supportsTablet: true,
       bundleIdentifier: "com.rafox2500.Yoursapp",
       infoPlist: {
-        ITSAppUsesNonExemptEncryption: false
+        ITSAppUsesNonExemptEncryption: false,
+        // These strings are required by Apple for location access
+        NSLocationWhenInUseUsageDescription: "This app needs access to your location to track your journeys and geofences.",
+        NSLocationAlwaysAndWhenInUseUsageDescription: "This app needs background location access to monitor geofences even when the app is closed."
       }
     },
     android: {
@@ -28,9 +31,14 @@ export default {
       },
       edgeToEdgeEnabled: true,
       package: "com.rafox2500.Yoursapp",
+      // 👇 CRITICAL: This permissions section fixes your specific error
+      permissions: [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION"
+      ],
       config: {
         googleMaps: {
-          // This pulls the actual key string from your environment variables
           apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY
         }
       }
@@ -38,6 +46,15 @@ export default {
     web: {
       favicon: "./assets/favicon.png"
     },
+    // 👇 Recommended: Explicitly configure the location plugin
+    plugins: [
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Yours-app to use your location to track journeys and safety zones."
+        }
+      ]
+    ],
     extra: {
       eas: {
         projectId: "4454e141-2909-4013-ae2d-51a4623c7a0f"
