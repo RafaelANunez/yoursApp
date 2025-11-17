@@ -46,3 +46,4 @@ yarn-error.*
 .expo/devices.json
 .env.example
 .env.example
+.expo/devices.json
