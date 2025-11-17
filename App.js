@@ -80,31 +80,6 @@ export default function App() {
   );
 }
 
- // --- Initialize geofencing and push notifications ---
-  useEffect(() => {
-    const initializeGeofencing = async () => {
-      try {
-        const token = await registerForPushNotifications();
-        if (token) {
-          let userId = await AsyncStorage.getItem('userId');
-          if (!userId) {
-            userId = `user_${Date.now()}`;
-            await AsyncStorage.setItem('userId', userId);
-          }
-          await saveUserToken(userId, token);
-        }
-        const activeGeofences = await getActiveGeofences();
-        if (activeGeofences.length > 0) {
-          await startGeofenceMonitoring(activeGeofences);
-        }
-      } catch (error) {
-        console.error('Error initializing geofencing:', error);
-      }
-    };
-    initializeGeofencing();
-  }, []);
-
-
 function AppContent() {
   const { user, isLoggedIn, isLoading } = useAuth();
   const navigationRef = useNavigationContainerRef();
@@ -133,6 +108,32 @@ function AppContent() {
     volumeHoldEnabled,
     volumeHoldDuration,
   });
+
+  // --- MOVED BLOCK ---
+  // --- Initialize geofencing and push notifications ---
+  useEffect(() => {
+    const initializeGeofencing = async () => {
+      try {
+        const token = await registerForPushNotifications();
+        if (token) {
+          let userId = await AsyncStorage.getItem('userId');
+          if (!userId) {
+            userId = `user_${Date.now()}`;
+            await AsyncStorage.setItem('userId', userId);
+          }
+          await saveUserToken(userId, token);
+        }
+        const activeGeofences = await getActiveGeofences();
+        if (activeGeofences.length > 0) {
+          await startGeofenceMonitoring(activeGeofences);
+        }
+      } catch (error) {
+        console.error('Error initializing geofencing:', error);
+      }
+    };
+    initializeGeofencing();
+  }, []);
+  // --- END OF MOVED BLOCK ---
 
   useEffect(() => {
     settingsRef.current = {
@@ -492,6 +493,8 @@ function AppContent() {
                 <Stack.Screen name="TrackAFriend" component={TrackAFriendPage} />
                 <Stack.Screen name="TrackingDetail" component={TrackingDetailPage} />
                 <Stack.Screen name="LocationHistory" component={LocationHistoryPage} />
+                  <Stack.Screen name="GeofenceManagement" component={GeofenceManagementPage} />
+
                 <Stack.Screen name="CreateGeofence" component={CreateGeofencePage} />
               </>
             ) : (

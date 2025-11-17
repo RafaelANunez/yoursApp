@@ -27,6 +27,10 @@
       "edgeToEdgeEnabled": true,
       "package": "com.rafox2500.Yoursapp"
     },
+      "config": {
+        "googleMaps": {
+          "apiKey": "${AIzaSyC1wsAHkcSvZQ-kEk6buQWM7a2syRbRFqg}"
+    },
     "web": {
       "favicon": "./assets/favicon.png"
     },
@@ -36,4 +40,5 @@
       }
     }
   }
+}
 }

@@ -15,7 +15,7 @@ const LocationIcon = ({ color = '#555' }) => (
   </Svg>
 );
 
-export default function GeofenceManagementPage({ onBack, onNavigate }) {
+export default function GeofenceManagementPage({ navigation }) {
   const [geofences, setGeofences] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -51,7 +51,7 @@ export default function GeofenceManagementPage({ onBack, onNavigate }) {
   };
 
   const handleEdit = (geofence) => {
-    onNavigate('EditGeofence', geofence.id);
+    navigation.navigate('EditGeofence', { id: geofence.id });
   };
 
   const handleDelete = (geofence) => {
@@ -82,13 +82,13 @@ export default function GeofenceManagementPage({ onBack, onNavigate }) {
   };
 
   const handleAddNew = () => {
-    onNavigate('CreateGeofence');
+    navigation.navigate('CreateGeofence');
   };
 
   if (loading) {
     return (
       <View style={styles.fullPage}>
-        <PageHeader title="Geofence Alerts" onBack={onBack} />
+        <PageHeader title="Geofence Alerts" onBack={() => navigation.goBack()} />
         <View style={styles.loadingContainer}>
           <Text>Loading geofences...</Text>
         </View>
@@ -98,7 +98,7 @@ export default function GeofenceManagementPage({ onBack, onNavigate }) {
 
   return (
     <View style={styles.fullPage}>
-      <PageHeader title="Geofence Alerts" onBack={onBack} />
+      <PageHeader title="Geofence Alerts" onBack={() => navigation.goBack()} />
 
       <View style={styles.container}>
         {geofences.length === 0 ? (
