@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -24,9 +24,13 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
-      "package": "com.rafox2500.Yoursapp"
-    },
+ "edgeToEdgeEnabled": true,
+      "package": "com.rafox2500.Yoursapp",
+
+      "config": {
+        "googleMaps": {
+          "apiKey": "${EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}"
+        },
     "web": {
       "favicon": "./assets/favicon.png"
     },
@@ -36,4 +40,6 @@
       }
     }
   }
+}
+}
 }

@@ -45,6 +45,13 @@ import FakeCallSettingsPage from './screens/FakeCallSettingsPage';
 import BackupAndRestorePage from './screens/BackupAndRestorePage';
 import UserProfileSettingsPage from './screens/UserProfileSettingsPage';
 
+//geofence
+import GeofenceManagementPage from './screens/GeofenceManagementPage';
+import CreateGeofencePage from './screens/CreateGeofencePage';
+import { registerForPushNotifications, saveUserToken } from './services/expoPushService';
+import { getActiveGeofences } from './services/geofenceStorage';
+import { startGeofenceMonitoring } from './services/geofencingService';
+
 // Journey Sharing Screens
 import JourneySharingPageV2 from './components/JourneySharing/JourneySharingPageV2';
 import TrackAFriendPage from './components/JourneySharing/TrackAFriendPage';
@@ -101,6 +108,32 @@ function AppContent() {
     volumeHoldEnabled,
     volumeHoldDuration,
   });
+
+  // --- MOVED BLOCK ---
+  // --- Initialize geofencing and push notifications ---
+  useEffect(() => {
+    const initializeGeofencing = async () => {
+      try {
+        const token = await registerForPushNotifications();
+        if (token) {
+          let userId = await AsyncStorage.getItem('userId');
+          if (!userId) {
+            userId = `user_${Date.now()}`;
+            await AsyncStorage.setItem('userId', userId);
+          }
+          await saveUserToken(userId, token);
+        }
+        const activeGeofences = await getActiveGeofences();
+        if (activeGeofences.length > 0) {
+          await startGeofenceMonitoring(activeGeofences);
+        }
+      } catch (error) {
+        console.error('Error initializing geofencing:', error);
+      }
+    };
+    initializeGeofencing();
+  }, []);
+  // --- END OF MOVED BLOCK ---
 
   useEffect(() => {
     settingsRef.current = {
@@ -460,6 +493,9 @@ function AppContent() {
                 <Stack.Screen name="TrackAFriend" component={TrackAFriendPage} />
                 <Stack.Screen name="TrackingDetail" component={TrackingDetailPage} />
                 <Stack.Screen name="LocationHistory" component={LocationHistoryPage} />
+                  <Stack.Screen name="GeofenceManagement" component={GeofenceManagementPage} />
+
+                <Stack.Screen name="CreateGeofence" component={CreateGeofencePage} />
               </>
             ) : (
               <>
