@@ -43,3 +43,4 @@ yarn-error.*
 /.tmp.driveupload
 .expo/devices.json
 .expo/devices.json
+.expo/devices.json
