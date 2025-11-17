@@ -42,10 +42,8 @@ yarn-error.*
 /android
 /.tmp.driveupload
 .expo/devices.json
-
-
-# Expo
-.expo
-dist/
-web-build/
-.env
+.expo/devices.json
+.expo/devices.json
+.env.example
+.env.example
+.expo/devices.json
