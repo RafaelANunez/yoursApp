@@ -24,13 +24,13 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
-      "package": "com.rafox2500.Yoursapp"
-    },
+ "edgeToEdgeEnabled": true,
+      "package": "com.rafox2500.Yoursapp",
+
       "config": {
         "googleMaps": {
-          "apiKey": "${AIzaSyATumQ7_LLbN5F-PtaA8Zu_xr73x6AH5Cc}"
-    },
+          "apiKey": "${EXPO_PUBLIC_GOOGLE_MAPS_API_KEY}"
+        },
     "web": {
       "favicon": "./assets/favicon.png"
     },
@@ -40,5 +40,6 @@
       }
     }
   }
+}
 }
 }
