@@ -24,7 +24,7 @@ import { JournalProvider } from './context/JournalContext';
 import { EmergencyContactsProvider } from './context/EmergencyContactsContext';
 import { AutofillProvider } from './context/AutofillContext';
 
-import { JournalIcon, AlertIcon, TimerIcon, SettingsIcon } from './components/Icons';
+import { JournalIcon, AlertIcon, TimerIcon, SettingsIcon, RecordIcon } from './components/Icons';
 
 // Login/Signup Screens
 import LoginScreen from './screens/LoginScreen';
@@ -34,6 +34,7 @@ import SignupScreen from './screens/SignupScreen';
 import { HomePage } from './screens/HomePage';
 import SecondaryHomeScreen from './screens/SecondaryHomeScreen';
 import { JournalPage } from './screens/JournalPage';
+import { RecordingPage } from './screens/AudioRecording/RecordingPage';
 import { PanicPage } from './screens/PanicPage';
 import { TimerPage } from './screens/TimerPage';
 import { SettingsPage } from './screens/SettingsPage';
@@ -414,26 +415,31 @@ function AppContent() {
                             onTriggerSudoku={() => setShowSudoku(true)}
                           />
                         )}
-                      </View>
-                      
-                      {!isFakeCallActive && !showSudoku && (
-                        <View style={styles.bottomNav}>
-                          <TouchableOpacity onPress={() => props.navigation.navigate('Journal')} style={styles.navButton}>
-                            <JournalIcon />
-                            <Text style={styles.navButtonText}>Journal</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => props.navigation.navigate('Panic')} style={styles.navButton}>
-                            <AlertIcon />
-                            <Text style={styles.navButtonText}>Panic</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => props.navigation.navigate('Timer')} style={styles.navButton}>
-                            <TimerIcon />
-                            <Text style={styles.navButtonText}>Timer</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => props.navigation.navigate('Settings')} style={styles.navButton}>
-                            <SettingsIcon />
-                            <Text style={styles.navButtonText}>Settings</Text>
-                          </TouchableOpacity>
+                    </View>
+
+                    {/* --- THIS IS THE MENU THAT WAS HIDDEN --- */}
+                    {!isFakeCallActive && !showSudoku && (
+                      <View style={styles.bottomNav}>
+                        <TouchableOpacity onPress={() => props.navigation.navigate('Journal')} style={styles.navButton}>
+                          <JournalIcon />
+                          <Text style={styles.navButtonText}>Journal</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => props.navigation.navigate('Record')} style={styles.navButton}>
+                          <RecordIcon />
+                          <Text style={styles.navButtonText}>Record</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => props.navigation.navigate('Panic')} style={styles.navButton}>
+                          <AlertIcon />
+                          <Text style={styles.navButtonText}>Panic</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => props.navigation.navigate('Timer')} style={styles.navButton}>
+                          <TimerIcon />
+                          <Text style={styles.navButtonText}>Timer</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => props.navigation.navigate('Settings')} style={styles.navButton}>
+                          <SettingsIcon />
+                          <Text style={styles.navButtonText}>Settings</Text>
+                        </TouchableOpacity>
                         </View>
                       )}
 
@@ -494,6 +500,42 @@ function AppContent() {
                 <Stack.Screen name="TrackingDetail" component={TrackingDetailPage} />
                 <Stack.Screen name="LocationHistory" component={LocationHistoryPage} />
                   <Stack.Screen name="GeofenceManagement" component={GeofenceManagementPage} />
+              {/* Core Screens */}
+              <Stack.Screen name="Journal" component={JournalPage} />
+              <Stack.Screen name="Record" component={RecordingPage} />
+              <Stack.Screen name="Panic" component={PanicPage} />
+              <Stack.Screen name="Timer" component={TimerPage} />
+              <Stack.Screen name="Settings" component={SettingsPage} />
+              <Stack.Screen name="Contacts" component={ContactsPage} />
+              
+              {/* --- MODIFIED: FakeCallSettings screen --- */}
+              <Stack.Screen name="FakeCallSettings">
+                {props => (
+                  <FakeCallSettingsPage
+                    {...props} // This passes 'navigation'
+                    // Pass current settings down
+                    settings={{
+                      callerName,
+                      screenHoldEnabled,
+                      volumeHoldEnabled,
+                      screenHoldDuration,
+                      volumeHoldDuration,
+                    }}
+                    // --- MODIFIED: Provide a callback to save settings ---
+                    onSave={newSettings => {
+                      if (user?.email) {
+                        onSaveFakeCallSettings(user.email, newSettings);
+                      }
+                    }}
+                  />
+                )}
+              </Stack.Screen>
+              
+              <Stack.Screen name="BackupAndRestore" component={BackupAndRestorePage} />
+              <Stack.Screen name="DiscreetMode" component={DiscreetModeSettingsPage} />
+              
+              {/* --- ADDED: User Profile Screen --- */}
+              <Stack.Screen name="UserProfileSettings" component={UserProfileSettingsPage} />
 
                 <Stack.Screen name="CreateGeofence" component={CreateGeofencePage} />
               </>

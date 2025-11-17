@@ -36,9 +36,19 @@
     },
     "extra": {
       "eas": {
-        "projectId": "4454e141-2909-4013-ae2d-51a4623c7a0f"
+        "projectId": "16c092d7-c6ca-41e6-9359-0be630edbe19"
       }
-    }
+    },
+    "plugins": [
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone."
+        }
+      ],
+      "expo-asset"
+    ],
+    "owner": "nailah"
   }
 }
 }
