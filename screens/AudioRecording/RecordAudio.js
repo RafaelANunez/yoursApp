@@ -1,13 +1,12 @@
-import { RecordingIcon, StopRecordingIcon } from '../../components/Icons'; // Assuming icons are in ../components/Icons.js
-import { View, Text, StyleSheet, SafeAreaView, Pressable } from 'react-native';
+import React, { useEffect } from 'react';
+import { RecordingIcon, StopRecordingIcon } from '../../components/Icons'; 
+import { View, Text, StyleSheet, SafeAreaView, Pressable, Alert } from 'react-native';
 import {
   useAudioRecorder,
   AudioModule,
   RecordingPresets,
-  setAudioModeAsync,
   useAudioRecorderState,
 } from 'expo-audio';
-import { File, Directory, Paths } from 'expo-file-system';
 import * as FileSystem from 'expo-file-system/legacy';
 
 export const RecordAudio = () => {
@@ -16,41 +15,78 @@ export const RecordAudio = () => {
   const recorderState = useAudioRecorderState(audioRecorder);
   const audioDirectory = FileSystem.documentDirectory + 'recordings/';
 
+  // 1. Request permissions when the component mounts
+  useEffect(() => {
+    (async () => {
+      try {
+        const status = await AudioModule.requestRecordingPermissionsAsync();
+        if (!status.granted) {
+          Alert.alert('Permission Required', 'Permission to access microphone was denied');
+        }
+      } catch (error) {
+        console.error('Error requesting permissions:', error);
+      }
+    })();
+  }, []);
+
   const startRecording = async () => 
   {
-    console.log("Preparing to record");
-    await audioRecorder.prepareToRecordAsync();
-    console.log("prepared")
-    audioRecorder.record({ forDuration: 10 });
-    console.log("Recording started");
+    try {
+      // 2. Check permissions again before starting
+      const status = await AudioModule.getRecordingPermissionsAsync();
+      if (!status.granted) {
+        const newStatus = await AudioModule.requestRecordingPermissionsAsync();
+        if (!newStatus.granted) {
+          Alert.alert('Permission Required', 'Please enable microphone access to record audio.');
+          return;
+        }
+      }
+
+      console.log("Preparing to record");
+      await audioRecorder.prepareToRecordAsync();
+      console.log("prepared");
+      
+      // 3. Start recording
+      // Note: Removed { forDuration: 10 } to allow manual stopping via the button
+      audioRecorder.record(); 
+      console.log("Recording started");
+      
+    } catch (error) {
+      console.error("Failed to start recording:", error);
+      Alert.alert("Error", "Failed to start recording.");
+    }
   }
 
   const stopRecording = async () =>
   {
-    await audioRecorder.stop();
-    console.log("Recording stopped");
-    const audioFileUri = await getDate() + '.mp3';
-    console.log("saving recording as: ", audioFileUri);
-    console.log(audioRecorder.uri);
-    const fileUri = audioRecorder.uri;
-    const destinationUri = audioDirectory + audioFileUri;
-    
     try {
-      // Ensure the recordings directory exists
-      await FileSystem.makeDirectoryAsync(audioDirectory, { intermediates: true });
-      
-      // Copy the file from temporary location to recordings directory
-      await FileSystem.copyAsync({
-        from: fileUri,
-        to: destinationUri,
-      });
-      console.log("File saved to: ", destinationUri);
-      
-      // Delete the original temporary file
-      await FileSystem.deleteAsync(fileUri);
-      console.log("Temporary file deleted");
+        await audioRecorder.stop();
+        console.log("Recording stopped");
+        
+        const audioFileUri = getDate() + '.mp3';
+        console.log("saving recording as: ", audioFileUri);
+        console.log(audioRecorder.uri);
+        
+        const fileUri = audioRecorder.uri;
+        const destinationUri = audioDirectory + audioFileUri;
+        
+        // Ensure the recordings directory exists
+        await FileSystem.makeDirectoryAsync(audioDirectory, { intermediates: true });
+        
+        // Copy the file from temporary location to recordings directory
+        await FileSystem.copyAsync({
+            from: fileUri,
+            to: destinationUri,
+        });
+        console.log("File saved to: ", destinationUri);
+        
+        // Delete the original temporary file (optional, but good for cleanup)
+        // Note: Only delete if you are sure the copy succeeded
+        await FileSystem.deleteAsync(fileUri, { idempotent: true }); 
+        console.log("Temporary file deleted");
+        
     } catch (error) {
-      console.error("Error saving recording: ", error);
+        console.error("Error saving recording: ", error);
     }
   }
 
@@ -63,9 +99,8 @@ export const RecordAudio = () => {
   }
 
   return (
-    <SafeAreaView>
+    <SafeAreaView style={styles.safeArea}>
       <View style={styles.recordingButtonContainer}>
-          {/* <RecordingIcon color='#F87171' height={200} width={200} /> */}
           <Pressable
             alignItems='center'
             onPress={() => recorderState.isRecording ? stopRecording() : startRecording()}
