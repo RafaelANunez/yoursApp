@@ -110,7 +110,6 @@ function AppContent() {
     volumeHoldDuration,
   });
 
-  // --- MOVED BLOCK ---
   // --- Initialize geofencing and push notifications ---
   useEffect(() => {
     const initializeGeofencing = async () => {
@@ -134,7 +133,6 @@ function AppContent() {
     };
     initializeGeofencing();
   }, []);
-  // --- END OF MOVED BLOCK ---
 
   useEffect(() => {
     settingsRef.current = {
@@ -465,7 +463,9 @@ function AppContent() {
                   }}
                 />
 
+                {/* Core Screens - Consolidated List */}
                 <Stack.Screen name="Journal" component={JournalPage} />
+                <Stack.Screen name="Record" component={RecordingPage} />
                 <Stack.Screen name="Panic" component={PanicPage} />
                 <Stack.Screen name="Timer" component={TimerPage} />
                 <Stack.Screen name="Settings" component={SettingsPage} />
@@ -495,49 +495,14 @@ function AppContent() {
                 <Stack.Screen name="DiscreetMode" component={DiscreetModeSettingsPage} />
                 <Stack.Screen name="UserProfileSettings" component={UserProfileSettingsPage} />
 
+                {/* Journey Sharing & Location Screens */}
                 <Stack.Screen name="JourneySharing" component={JourneySharingPageV2} />
                 <Stack.Screen name="TrackAFriend" component={TrackAFriendPage} />
                 <Stack.Screen name="TrackingDetail" component={TrackingDetailPage} />
                 <Stack.Screen name="LocationHistory" component={LocationHistoryPage} />
-                  <Stack.Screen name="GeofenceManagement" component={GeofenceManagementPage} />
-              {/* Core Screens */}
-              <Stack.Screen name="Journal" component={JournalPage} />
-              <Stack.Screen name="Record" component={RecordingPage} />
-              <Stack.Screen name="Panic" component={PanicPage} />
-              <Stack.Screen name="Timer" component={TimerPage} />
-              <Stack.Screen name="Settings" component={SettingsPage} />
-              <Stack.Screen name="Contacts" component={ContactsPage} />
-              
-              {/* --- MODIFIED: FakeCallSettings screen --- */}
-              <Stack.Screen name="FakeCallSettings">
-                {props => (
-                  <FakeCallSettingsPage
-                    {...props} // This passes 'navigation'
-                    // Pass current settings down
-                    settings={{
-                      callerName,
-                      screenHoldEnabled,
-                      volumeHoldEnabled,
-                      screenHoldDuration,
-                      volumeHoldDuration,
-                    }}
-                    // --- MODIFIED: Provide a callback to save settings ---
-                    onSave={newSettings => {
-                      if (user?.email) {
-                        onSaveFakeCallSettings(user.email, newSettings);
-                      }
-                    }}
-                  />
-                )}
-              </Stack.Screen>
-              
-              <Stack.Screen name="BackupAndRestore" component={BackupAndRestorePage} />
-              <Stack.Screen name="DiscreetMode" component={DiscreetModeSettingsPage} />
-              
-              {/* --- ADDED: User Profile Screen --- */}
-              <Stack.Screen name="UserProfileSettings" component={UserProfileSettingsPage} />
-
+                <Stack.Screen name="GeofenceManagement" component={GeofenceManagementPage} />
                 <Stack.Screen name="CreateGeofence" component={CreateGeofencePage} />
+
               </>
             ) : (
               <>
