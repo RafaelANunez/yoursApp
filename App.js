@@ -35,6 +35,7 @@ import { HomePage } from './screens/HomePage';
 import SecondaryHomeScreen from './screens/SecondaryHomeScreen';
 import { JournalPage } from './screens/JournalPage';
 import { RecordingPage } from './screens/AudioRecording/RecordingPage';
+import { SavedRecords } from './screens/AudioRecording/SavedRecords';
 import { PanicPage } from './screens/PanicPage';
 import { TimerPage } from './screens/TimerPage';
 import { SettingsPage } from './screens/SettingsPage';
@@ -46,7 +47,7 @@ import FakeCallSettingsPage from './screens/FakeCallSettingsPage';
 import BackupAndRestorePage from './screens/BackupAndRestorePage';
 import UserProfileSettingsPage from './screens/UserProfileSettingsPage';
 
-//geofence
+// Geofence
 import GeofenceManagementPage from './screens/GeofenceManagementPage';
 import CreateGeofencePage from './screens/CreateGeofencePage';
 import { registerForPushNotifications, saveUserToken } from './services/expoPushService';
@@ -415,7 +416,6 @@ function AppContent() {
                         )}
                     </View>
 
-                    {/* --- THIS IS THE MENU THAT WAS HIDDEN --- */}
                     {!isFakeCallActive && !showSudoku && (
                       <View style={styles.bottomNav}>
                         <TouchableOpacity onPress={() => props.navigation.navigate('Journal')} style={styles.navButton}>
@@ -463,9 +463,17 @@ function AppContent() {
                   }}
                 />
 
-                {/* Core Screens - Consolidated List */}
                 <Stack.Screen name="Journal" component={JournalPage} />
                 <Stack.Screen name="Record" component={RecordingPage} />
+                <Stack.Screen 
+                  name="SavedRecords" 
+                  component={SavedRecords} 
+                  options={{ 
+                    headerShown: true, 
+                    title: 'Recordings',
+                    headerBackTitle: 'Back'
+                  }} 
+                />
                 <Stack.Screen name="Panic" component={PanicPage} />
                 <Stack.Screen name="Timer" component={TimerPage} />
                 <Stack.Screen name="Settings" component={SettingsPage} />
@@ -495,7 +503,6 @@ function AppContent() {
                 <Stack.Screen name="DiscreetMode" component={DiscreetModeSettingsPage} />
                 <Stack.Screen name="UserProfileSettings" component={UserProfileSettingsPage} />
 
-                {/* Journey Sharing & Location Screens */}
                 <Stack.Screen name="JourneySharing" component={JourneySharingPageV2} />
                 <Stack.Screen name="TrackAFriend" component={TrackAFriendPage} />
                 <Stack.Screen name="TrackingDetail" component={TrackingDetailPage} />

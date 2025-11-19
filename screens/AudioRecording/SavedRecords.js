@@ -1,47 +1,56 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, FlatList, Pressable, TextInput, Alert, TouchableOpacity } from 'react-native';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  SafeAreaView, 
+  FlatList, 
+  Pressable, 
+  Alert, 
+  TouchableOpacity,
+  StatusBar 
+} from 'react-native';
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system/legacy';
+// --- FIX: Use legacy import for compatibility with SDK 54 ---
+import * as FileSystem from 'expo-file-system/legacy'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { EditIcon, DeleteIcon } from '../../components/Icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 const RECORDINGS_DIR = FileSystem.documentDirectory + 'recordings/';
-
+const CORAL_COLOR = '#FF6B6B';
 
 const metaKeyFor = (fileUri) => `record_meta:${fileUri}`;
 
-
-export const SavedRecords = () => {
+export const SavedRecords = ({ navigation }) => {
   const [files, setFiles] = useState([]);
   const [metadata, setMetadata] = useState({});
   const [playingUri, setPlayingUri] = useState(null);
   const soundRef = useRef(new Audio.Sound());
-  const [editingUri, setEditingUri] = useState(null);
 
   useEffect(() => {
-    (async () => {
-      await loadFiles();
-    })();
+    // Initial Load
+    loadFiles();
 
-      // Poll for new files every 2 seconds
-  const interval = setInterval(async () => {
-    await loadFiles();
-  }, 2000);
+    // Poll for new files (refresh list if a new recording is saved)
+    const interval = setInterval(loadFiles, 2000);
 
-  return () => {
-    clearInterval(interval); // cleanup interval
-    (async () => {
-      try {
-        await soundRef.current.unloadAsync();
-      } catch (error) {}
-    })();
-  };
+    return () => {
+      clearInterval(interval);
+      unloadSound();
+    };
   }, []);
 
+  const unloadSound = async () => {
+    try {
+      await soundRef.current.unloadAsync();
+    } catch (error) {}
+  };
+
   const loadFiles = async () => {
-    try{
-      const dirExists = await FileSystem.getInfoAsync(RECORDINGS_DIR);
-      if(!dirExists.exists){
+    try {
+      const dirInfo = await FileSystem.getInfoAsync(RECORDINGS_DIR);
+      if (!dirInfo.exists) {
+        await FileSystem.makeDirectoryAsync(RECORDINGS_DIR, { intermediates: true });
         setFiles([]);
         return;
       }
@@ -50,102 +59,85 @@ export const SavedRecords = () => {
       const list = names.map((name) => ({
         name,
         uri: RECORDINGS_DIR + name,
-      }));
+      })).reverse(); // Show newest first
 
       setFiles(list);
 
-      //load metadata for all items
+      // Load metadata
       const metaEntries = {};
       for (const item of list) {
         const key = metaKeyFor(item.uri);
         const json = await AsyncStorage.getItem(key);
-        if(json) metaEntries[item.uri] = JSON.parse(json);
+        if (json) metaEntries[item.uri] = JSON.parse(json);
       }
       setMetadata(metaEntries);
     } catch (error) {
       console.error('Error loading files', error);
-      setFiles([]);
     }
   };
 
   const playPause = async (uri) => {
     try {
-      // if same file is playing -> pause/stop
+      // If clicking the currently playing file, stop it
       if (playingUri === uri) {
         await soundRef.current.stopAsync();
         await soundRef.current.unloadAsync();
         setPlayingUri(null);
-        soundRef.current = new Audio.Sound();
         return;
       }
 
-      // stop any existing sound
+      // Stop any other playing sound
       if (playingUri) {
-        try {
-          await soundRef.current.stopAsync();
-          await soundRef.current.unloadAsync();
-        } catch (error) {}
-        soundRef.current = new Audio.Sound();
-        setPlayingUri(null);
+        await soundRef.current.unloadAsync();
       }
 
-      // load and play new
-      const status = await soundRef.current.loadAsync({ uri }, { shouldPlay: true });
-      if (status.isLoaded) setPlayingUri(uri);
-      //optional: listen to finish
-      soundRef.current.setOnPlaybackStatusUpdate((s) => {
-        if (s.didJustFinish) {
-          soundRef.current.unloadAsync().catch(() => {});
-          soundRef.current = new Audio.Sound();
+      // Play new file
+      await soundRef.current.loadAsync({ uri }, { shouldPlay: true });
+      setPlayingUri(uri);
+      
+      soundRef.current.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) {
           setPlayingUri(null);
+          soundRef.current.unloadAsync();
         }
       });
     } catch (error) {
-      console.error('playback error: ', error);
-      Alert.alert('playback error: ', String(error));
-    }
-  };
-
-  const saveMetadata = async (uri, meta) => {
-    try {
-      const key = metaKeyFor(uri);
-      await AsyncStorage.setItem(key, JSON.stringify(meta));
-      setMetadata((prev) => ({ ...prev, [uri]: meta }));
-    } catch (error) {
-      console.error('error saving metadata: ', error);
+      console.log('Playback failed', error);
+      setPlayingUri(null);
     }
   };
 
   const parseRecordingDate = (filename) => {
-    // your naming in RecordAudio: H:M:S_M-D-YYYY.mp3
-    // example: 14:30:45_11-16-2025.mp3
+    // Format: HH:MM:SS_MM-DD-YYYY.mp3
     try {
       const base = filename.replace('.mp3', '');
       const [timePart, datePart] = base.split('_');
-      if (!timePart || !datePart) return null;
-      const [h, m, s] = timePart.split(':').map((v) => parseInt(v, 10));
-      const [month, day, year] = datePart.split('-').map((v) => parseInt(v, 10));
-      const dt = new Date(year, month - 1, day, h, m, s);
-      return dt.toLocaleString();
+      if (!timePart || !datePart) return 'Unknown Date';
+      return `${datePart.replace(/-/g, '/')} • ${timePart}`;
     } catch (e) {
-      return null;
+      return 'Unknown Date';
     }
   };
 
   const getSeverityColor = (severity) => {
-    const colors = {
-      danger: '#FECACA',
-      warning: '#FEF08A',
-      suspicious: '#E5E7EB',
-      regular: 'white'
-    };
-    return colors[severity] || 'white';
+    switch (severity) {
+      case 'danger': return '#EF4444';
+      case 'warning': return '#F59E0B';
+      case 'suspicious': return '#8B5CF6';
+      default: return '#E5E7EB'; // Grey for regular
+    }
   };
 
-  const deleteRecording = (uri) => {
+  const updateMetadata = async (uri, key, value) => {
+    const newMeta = { ...(metadata[uri] || {}), [key]: value };
+    await AsyncStorage.setItem(metaKeyFor(uri), JSON.stringify(newMeta));
+    setMetadata(prev => ({ ...prev, [uri]: newMeta }));
+  };
+
+  const handleDelete = (uri) => {
     Alert.alert(
       'Delete Recording',
-      'Are you sure you want to delete this recording and its metadata?',
+      'This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -153,21 +145,11 @@ export const SavedRecords = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Delete the file
               await FileSystem.deleteAsync(uri);
-              // Delete metadata
-              const key = metaKeyFor(uri);
-              await AsyncStorage.removeItem(key);
-              // Update state
-              setFiles((prev) => prev.filter((f) => f.uri !== uri));
-              setMetadata((prev) => {
-                const updated = { ...prev };
-                delete updated[uri];
-                return updated;
-              });
+              await AsyncStorage.removeItem(metaKeyFor(uri));
+              loadFiles(); // Refresh list immediately
             } catch (error) {
-              console.error('Error deleting recording:', error);
-              Alert.alert('Error', 'Failed to delete the recording.');
+              console.error('Delete failed', error);
             }
           },
         },
@@ -175,213 +157,247 @@ export const SavedRecords = () => {
     );
   };
 
+  const handleEditName = (uri, currentName) => {
+    Alert.prompt(
+      'Rename Recording',
+      null,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Save', onPress: text => updateMetadata(uri, 'displayName', text) }
+      ],
+      'plain-text',
+      currentName
+    );
+  };
+
+  const handleSetSeverity = (uri) => {
+    Alert.alert(
+      'Set Priority',
+      'Flag this recording based on urgency:',
+      [
+        { text: '🔴 Danger', onPress: () => updateMetadata(uri, 'severity', 'danger') },
+        { text: '🟠 Warning', onPress: () => updateMetadata(uri, 'severity', 'warning') },
+        { text: '🟣 Suspicious', onPress: () => updateMetadata(uri, 'severity', 'suspicious') },
+        { text: '⚪ Regular', onPress: () => updateMetadata(uri, 'severity', 'regular') },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
   const renderItem = ({ item }) => {
     const meta = metadata[item.uri] || {};
-    return(
-      <View style={[styles.recordingItem, { backgroundColor: getSeverityColor(meta.severity) }]}>
-        <View style={styles.recordingItemContent}>
-          <Text style={styles.recordingItemTitle}>{meta.displayName || item.name}</Text>
-          <Text style={styles.recordingItemDate}>{parseRecordingDate(item.name) || 'Unknown Date'}</Text>
-          <Text style={styles.recordingItemNotes}>{meta.description || 'No description'}</Text>
-        </View>
-        <View style={styles.recordingActions}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => playPause(item.uri)}
-          >
-            <Text style={styles.playButtonText}>{playingUri === item.uri ? '⏹' : '▶'}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => {
-              Alert.prompt(
-                'Display Name',
-                'Enter a display name',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'OK',
-                    onPress: async (text) => {
-                      const newMeta = { ...(metadata[item.uri] || {}), displayName: text };
-                      await saveMetadata(item.uri, newMeta);
-                    },
-                  },
-                ],
-                'plain-text',
-                meta.displayName || ''
-              );
-            }}
-          >
-            <Text style={styles.smallButtonText}>Name</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => {
-              Alert.prompt(
-                'Description',
-                'Add a description',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'OK',
-                    onPress: async (text) => {
-                      const newMeta = { ...(metadata[item.uri] || {}), description: text };
-                      await saveMetadata(item.uri, newMeta);
-                    },
-                  },
-                ],
-                'plain-text',
-                meta.description || ''
-              );
-            }}
-          >
-            <Text style={styles.smallButtonText}>Desc</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={() => {
-              const severities = ['danger', 'warning', 'suspicious', 'regular'];
-              Alert.alert(
-                'Set Severity',
-                'Choose a severity level',
-                [
-                  ...severities.map((sev) => ({
-                    text: sev.charAt(0).toUpperCase() + sev.slice(1),
-                    onPress: async () => {
-                      const newMeta = { ...(metadata[item.uri] || {}), severity: sev };
-                      await saveMetadata(item.uri, newMeta);
-                    },
-                  })),
-                  { text: 'Cancel', style: 'cancel' },
-                ]
-              );
-            }}
-          >
-            <Text style={styles.smallButtonText}>Severity</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.recordingIconActions}>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => {
-              Alert.prompt(
-                'Edit Recording',
-                'Update display name or description',
-                [
-                  { text: 'Cancel', style: 'cancel' },
-                  {
-                    text: 'OK',
-                    onPress: async (text) => {
-                      const newMeta = { ...(metadata[item.uri] || {}), displayName: text };
-                      await saveMetadata(item.uri, newMeta);
-                    },
-                  },
-                ],
-                'plain-text',
-                meta.displayName || ''
-              );
-            }}
-          >
-            <EditIcon />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => deleteRecording(item.uri)}
-          >
-            <DeleteIcon />
-          </TouchableOpacity>
+    const severityColor = getSeverityColor(meta.severity);
+    const isPlaying = playingUri === item.uri;
+    const displayName = meta.displayName || item.name;
+
+    return (
+      <View style={styles.card}>
+        {/* Severity Strip */}
+        <View style={[styles.severityStrip, { backgroundColor: severityColor }]} />
+        
+        <View style={styles.cardContent}>
+          
+          {/* Top Row: Play Button & Info */}
+          <View style={styles.topRow}>
+            <TouchableOpacity 
+              style={[styles.playButton, isPlaying && styles.playButtonActive]} 
+              onPress={() => playPause(item.uri)}
+            >
+              <Ionicons 
+                name={isPlaying ? "stop" : "play"} 
+                size={20} 
+                color={isPlaying ? CORAL_COLOR : "#fff"} 
+              />
+            </TouchableOpacity>
+
+            <View style={styles.infoContainer}>
+              <Text style={styles.title} numberOfLines={1}>{displayName}</Text>
+              <Text style={styles.date}>{parseRecordingDate(item.name)}</Text>
+            </View>
+            
+            {/* Severity Badge (Icon) */}
+            {meta.severity && meta.severity !== 'regular' && (
+               <Ionicons name="flag" size={16} color={severityColor} style={{marginRight: 10}}/>
+            )}
+          </View>
+
+          {/* Description (if exists) */}
+          {meta.description ? (
+            <Text style={styles.description} numberOfLines={2}>{meta.description}</Text>
+          ) : null}
+
+          {/* Bottom Row: Actions */}
+          <View style={styles.actionRow}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => handleEditName(item.uri, displayName)}>
+              <Ionicons name="pencil-outline" size={16} color="#6B7280" />
+              <Text style={styles.actionText}>Rename</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.actionBtn} onPress={() => handleSetSeverity(item.uri)}>
+              <Ionicons name="flag-outline" size={16} color="#6B7280" />
+              <Text style={styles.actionText}>Flag</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity style={styles.actionBtn} onPress={() => {
+               Alert.prompt('Add Note', 'Enter description:', [
+                 { text: 'Cancel' }, 
+                 { text: 'Save', onPress: t => updateMetadata(item.uri, 'description', t) }
+               ], 'plain-text', meta.description)
+            }}>
+              <Ionicons name="document-text-outline" size={16} color="#6B7280" />
+              <Text style={styles.actionText}>Note</Text>
+            </TouchableOpacity>
+
+            <View style={{flex: 1}} /> 
+            
+            <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item.uri)}>
+              <Ionicons name="trash-outline" size={18} color="#EF4444" />
+            </TouchableOpacity>
+          </View>
+
         </View>
       </View>
     );
   };
+
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.header}>Saved Recordings</Text>
+      <StatusBar barStyle="dark-content" />
+      
       <FlatList
         data={files}
-        keyExtractor={(it) => it.uri}
+        keyExtractor={(item) => item.uri}
         renderItem={renderItem}
-        ListEmptyComponent={<Text style={styles.empty}>No recordings yet</Text>}
-        contentContainerStyle={files.length === 0 ? styles.emptyContainer : null}
+        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Ionicons name="mic-off-outline" size={64} color="#E5E7EB" />
+            <Text style={styles.emptyText}>No recordings yet</Text>
+            <Text style={styles.emptySubText}>Swipe left to start recording</Text>
+          </View>
+        }
       />
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, 
-    padding: 16, 
-    backgroundColor: '#f9f9f9' 
-  },
-  header: { 
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginVertical: '5%',
-    textAlign: 'center',
-  },
-  recordingItem: {
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  recordingItemContent: {
+  container: {
     flex: 1,
+    backgroundColor: '#F9FAFB',
   },
-  recordingItemTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-    marginBottom: 4,
+  listContent: {
+    padding: 20,
+    paddingBottom: 100,
   },
-  recordingItemDate: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 8,
+  
+  // Card Styles
+  card: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+    overflow: 'hidden',
   },
-  recordingItemNotes: {
-    fontSize: 14,
-    color: '#4B5563',
-    lineHeight: 20,
-    marginTop: 4,
+  severityStrip: {
+    width: 6,
+    height: '100%',
   },
-  recordingActions: {
-    flexDirection: 'column',
-    alignItems: 'flex-end',
-    gap: 6,
+  cardContent: {
+    flex: 1,
+    padding: 16,
+  },
+  
+  // Top Row
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  playButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: CORAL_COLOR,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
   },
-  actionButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: '#F87171',
-    borderRadius: 6,
-    minWidth: 50,
-    alignItems: 'center',
+  playButtonActive: {
+    backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: CORAL_COLOR,
   },
-  playButtonText: {
-    color: '#fff',
-    fontWeight: '600',
+  infoContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  title: {
     fontSize: 16,
+    fontWeight: '700',
+    color: '#111',
+    marginBottom: 2,
   },
-  smallButtonText: {
-    color: '#fff',
+  date: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '500',
+  },
+  
+  // Description
+  description: {
+    fontSize: 13,
+    color: '#4B5563',
+    fontStyle: 'italic',
+    marginBottom: 12,
+    marginLeft: 56, // Align with text start
+  },
+  
+  // Actions
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 20,
+    paddingVertical: 4,
+  },
+  actionText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginLeft: 4,
+    fontWeight: '500',
+  },
+  deleteBtn: {
+    padding: 4,
+  },
+  
+  // Empty State
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 100,
+  },
+  emptyText: {
+    marginTop: 16,
+    fontSize: 18,
     fontWeight: '600',
-    fontSize: 11,
+    color: '#374151',
   },
-  recordingIconActions: {
-    flexDirection: 'column',
-    justifyContent: 'space-between',
+  emptySubText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#9CA3AF',
   },
-  iconButton: {
-    padding: 8,
-  },
-  empty: { textAlign: 'center', marginTop: 40, color: '#666' },
-  emptyContainer: { flex: 1, justifyContent: 'center' },
 });
