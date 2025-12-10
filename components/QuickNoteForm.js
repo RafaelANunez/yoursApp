@@ -17,7 +17,8 @@ import {
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Audio, Video } from 'expo-av';
-import { Ionicons } from '@expo/vector-icons'; // Ensure you have this installed
+import { Ionicons } from '@expo/vector-icons'; 
+import { saveFileToGallery, galleryDirectory } from '../utils/fileSystem'; // Import file system utils
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -64,11 +65,31 @@ export const QuickNoteForm = ({ visible, entry, onClose, onSave, initialMode = '
       return;
     }
     setIsSaving(true);
+
+    // --- Persistent Storage Logic ---
+    // Iterate through attachments and save them to the permanent gallery directory if they aren't there already.
+    const savedAttachments = await Promise.all(attachments.map(async (att) => {
+        // If the URI already contains the persistent directory path, assume it's saved.
+        if (att.uri && att.uri.includes('gallery/')) { // Simple check for gallery path
+            return att;
+        }
+        
+        try {
+            // Save file to persistent storage
+            const savedUri = await saveFileToGallery(att.uri, att.type); 
+            return { ...att, uri: savedUri };
+        } catch (error) {
+            console.error("Failed to save attachment persistently:", error);
+            // Fallback to original URI if save fails, so we don't lose the reference immediately
+            return att;
+        }
+    }));
+
     await onSave({
       title: 'Quick Note',
       notes: content,
       color: selectedColor,
-      attachments: attachments,
+      attachments: savedAttachments, // Use the list with persistent URIs
       type: 'quick_note',
       date: entry ? entry.date : new Date().toISOString(),
     });
@@ -78,7 +99,7 @@ export const QuickNoteForm = ({ visible, entry, onClose, onSave, initialMode = '
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All, // Allow videos too
+      mediaTypes: ImagePicker.MediaTypeOptions.All, 
       allowsEditing: true,
       quality: 0.7,
     });
@@ -167,34 +188,42 @@ export const QuickNoteForm = ({ visible, entry, onClose, onSave, initialMode = '
         <Text style={styles.viewText}>{content || "No text content"}</Text>
       )}
       
+      {/* Changed to column layout to fit note area width */}
       <View style={styles.attachmentsGrid}>
-        {attachments.map((att, index) => (
-          <TouchableOpacity 
-            key={index} 
-            style={styles.attachmentWrapper}
-            onPress={() => handleAttachmentPress(att)}
-            disabled={isEditing} // Only open full screen in view mode
-          >
-            {att.type === 'image' ? (
-              <Image source={{ uri: att.uri }} style={styles.attachmentImage} />
-            ) : att.type === 'video' ? (
-               <View style={[styles.attachmentImage, {backgroundColor: 'black', justifyContent: 'center', alignItems: 'center'}]}>
-                  <Text style={{fontSize: 30}}>▶️</Text>
-               </View>
-            ) : (
-              <View style={styles.audioPlaceholder}>
-                <Text>🎤 Audio</Text>
-              </View>
-            )}
-            
-            {/* Remove button only in Edit Mode */}
-            {isEditing && (
-              <TouchableOpacity style={styles.removeBtn} onPress={() => removeAttachment(index)}>
-                <Text style={styles.removeBtnText}>✕</Text>
+        {attachments.map((att, index) => {
+            // Determine style based on type for better scaling
+            const isAudio = att.type === 'audio';
+            const wrapperStyle = isAudio ? styles.audioWrapper : styles.mediaWrapper;
+
+            return (
+              <TouchableOpacity 
+                key={index} 
+                style={wrapperStyle}
+                onPress={() => handleAttachmentPress(att)}
+                disabled={isEditing} 
+              >
+                {att.type === 'image' ? (
+                  <Image source={{ uri: att.uri }} style={styles.attachmentImage} />
+                ) : att.type === 'video' ? (
+                   <View style={[styles.attachmentImage, {backgroundColor: '#000', justifyContent: 'center', alignItems: 'center'}]}>
+                      <Text style={{fontSize: 40}}>▶️</Text>
+                   </View>
+                ) : (
+                  <View style={styles.audioContent}>
+                    <Text style={{fontSize: 20, marginRight: 10}}>🎤</Text>
+                    <Text style={styles.audioText}>Audio Recording {index + 1}</Text>
+                  </View>
+                )}
+                
+                {/* Remove button only in Edit Mode */}
+                {isEditing && (
+                  <TouchableOpacity style={styles.removeBtn} onPress={() => removeAttachment(index)}>
+                    <Text style={styles.removeBtnText}>✕</Text>
+                  </TouchableOpacity>
+                )}
               </TouchableOpacity>
-            )}
-          </TouchableOpacity>
-        ))}
+            );
+        })}
       </View>
     </ScrollView>
   );
@@ -287,14 +316,54 @@ const styles = StyleSheet.create({
   headerBtn: { fontSize: 16, color: '#4B5563' },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1F2937' },
   contentContainer: { flex: 1 },
-  input: { fontSize: 18, color: '#374151', minHeight: 150, textAlignVertical: 'top', paddingTop: 0 },
-  viewText: { fontSize: 18, color: '#374151', lineHeight: 26 },
-  attachmentsGrid: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 15 },
-  attachmentWrapper: { width: 100, height: 100, marginRight: 10, marginBottom: 10, borderRadius: 8, overflow: 'hidden', position: 'relative' },
-  attachmentImage: { width: '100%', height: '100%' },
-  audioPlaceholder: { flex: 1, backgroundColor: '#E5E7EB', justifyContent: 'center', alignItems: 'center' },
-  removeBtn: { position: 'absolute', top: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.6)', width: 22, height: 22, borderRadius: 11, justifyContent: 'center', alignItems: 'center' },
-  removeBtnText: { color: 'white', fontSize: 12, fontWeight: 'bold', marginTop: -2 },
+  input: { fontSize: 18, color: '#374151', minHeight: 100, textAlignVertical: 'top', paddingTop: 0, marginBottom: 10 },
+  viewText: { fontSize: 18, color: '#374151', lineHeight: 26, marginBottom: 20 },
+  
+  // Updated Styles for Media Scaling and Layout
+  attachmentsGrid: { 
+    flexDirection: 'column', // Stack vertically
+    marginTop: 10 
+  },
+  mediaWrapper: { 
+    width: '100%', // Scale to fit width
+    height: 250,   // Fixed height for consistency
+    marginBottom: 15, 
+    borderRadius: 12, 
+    overflow: 'hidden', 
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.05)'
+  },
+  audioWrapper: {
+    width: '100%',
+    height: 60,
+    marginBottom: 10,
+    borderRadius: 12,
+    backgroundColor: '#F3F4F6', // Light gray for audio
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    justifyContent: 'center'
+  },
+  attachmentImage: { 
+    width: '100%', 
+    height: '100%', 
+    resizeMode: 'contain' // Scale to fit within the wrapper
+  },
+  audioContent: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 15,
+    height: '100%' 
+  },
+  audioText: {
+    fontSize: 16,
+    color: '#374151',
+    fontWeight: '500'
+  },
+  
+  removeBtn: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.6)', width: 26, height: 26, borderRadius: 13, justifyContent: 'center', alignItems: 'center', zIndex: 10 },
+  removeBtnText: { color: 'white', fontSize: 14, fontWeight: 'bold', marginTop: -2 },
+  
   footer: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderColor: '#F3F4F6' },
   colorPicker: { flexDirection: 'row', marginBottom: 15, maxHeight: 40 },
   colorCircle: { width: 30, height: 30, borderRadius: 15, marginRight: 10, borderWidth: 1, borderColor: '#E5E7EB' },

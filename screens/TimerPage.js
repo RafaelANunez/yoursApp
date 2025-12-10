@@ -25,6 +25,8 @@ import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import BackgroundTimer from 'react-native-background-timer';
 import { sendBulkPushNotifications, getUserToken } from '../services/expoPushService';
+// UPDATED IMPORTS: Added interruption modes
+import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 
 import { 
   TIMER_EXPIRED_CATEGORY, 
@@ -142,6 +144,7 @@ export const TimerPage = ({ navigation }) => {
   const [isStarting, setIsStarting] = useState(false);
   
   const [isAutoAlertEnabled, setIsAutoAlertEnabled] = useState(false); 
+  const [sound, setSound] = useState(); // State for sound playback
 
   const timerFinishTimeRef = useRef(null);
   const appState = useRef(AppState.currentState);
@@ -216,6 +219,15 @@ export const TimerPage = ({ navigation }) => {
     };
   }, []);
 
+  // Cleanup sound when component unmounts or sound changes
+  useEffect(() => {
+    return sound
+      ? () => {
+          sound.unloadAsync();
+        }
+      : undefined;
+  }, [sound]);
+
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async nextAppState => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
@@ -252,6 +264,44 @@ export const TimerPage = ({ navigation }) => {
     setTotalSeconds(0);
     await AsyncStorage.removeItem(TIMER_END_TIME_KEY);
     await AsyncStorage.removeItem(TIMER_TOTAL_SECONDS_KEY);
+  };
+
+  // UPDATED: Robust Audio Player for Background
+  const playTimerSound = async () => {
+    try {
+        // Activate the audio session explicitly before creating the sound
+        // This is required to grab focus in the background on iOS
+        await Audio.setAudioModeAsync({
+            allowsRecordingIOS: false,
+            staysActiveInBackground: true,
+            interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+            playsInSilentModeIOS: true,
+            shouldDuckAndroid: true,
+            interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+            playThroughEarpieceAndroid: false,
+        });
+
+        const { sound } = await Audio.Sound.createAsync(
+            require('../assets/sounds/ringtone.mp3'),
+            { shouldPlay: true, isLooping: true }
+        );
+        setSound(sound);
+        // We do not need sound.playAsync() here because shouldPlay: true handles it
+    } catch (e) {
+        console.error("Failed to play timer sound:", e);
+    }
+  };
+
+  const stopTimerSound = async () => {
+    if (sound) {
+        try {
+            await sound.stopAsync();
+            await sound.unloadAsync();
+        } catch (e) {
+            console.log("Error stopping sound", e);
+        }
+        setSound(null);
+    }
   };
 
   useEffect(() => {
@@ -300,7 +350,8 @@ export const TimerPage = ({ navigation }) => {
     if (isStarting) return;
     setIsStarting(true);
 
-    Vibration.cancel(); 
+    Vibration.cancel();
+    stopTimerSound(); 
     setTimerCompleteModalVisible(false);
     stopBackgroundTicker();
 
@@ -326,6 +377,21 @@ export const TimerPage = ({ navigation }) => {
       setTotalSeconds(total);
       setSecondsLeft(total);
       setIsRunning(true);
+
+      // Pre-configure audio for background when timer starts (best practice)
+      try {
+        await Audio.setAudioModeAsync({
+            allowsRecordingIOS: false,
+            staysActiveInBackground: true,
+            interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+            playsInSilentModeIOS: true,
+            shouldDuckAndroid: true,
+            interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+            playThroughEarpieceAndroid: false,
+        });
+      } catch (audioErr) {
+          console.log("Warning: Could not pre-configure audio", audioErr);
+      }
 
       await AsyncStorage.setItem(LAST_TIMER_KEY, JSON.stringify({ hour: h, minute: m, second: s }));
       await AsyncStorage.setItem(TIMER_END_TIME_KEY, String(targetEndTime));
@@ -356,6 +422,7 @@ export const TimerPage = ({ navigation }) => {
   };
 
   const cancelTimer = async () => {
+    stopTimerSound();
     stopBackgroundTicker();
     cleanupTimerState();
     try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch(e) {}
@@ -371,7 +438,6 @@ export const TimerPage = ({ navigation }) => {
     }
   };
 
-  // UPDATED: Logic to return boolean based on success
   const sendAutomaticPush = async () => {
       const contactsWithApp = contacts.filter(c => c.linkedAppUserId);
       if (contactsWithApp.length === 0) {
@@ -382,7 +448,6 @@ export const TimerPage = ({ navigation }) => {
       try {
           const location = await Location.getCurrentPositionAsync({});
           const { latitude, longitude } = location.coords;
-          // FIXED: Correct URL
           const googleMapsUrl = `http://googleusercontent.com/maps.google.com/?q=${latitude},${longitude}`;
           
           const tokens = [];
@@ -399,15 +464,14 @@ export const TimerPage = ({ navigation }) => {
                   { latitude, longitude, url: googleMapsUrl, type: 'TIMER_EXPIRED' }
               );
               console.log("Auto timer push sent.");
-              return true; // Success!
+              return true; 
           }
       } catch (error) {
           console.error("Failed to send auto push:", error);
       }
-      return false; // Failed
+      return false; 
   };
 
-  // UPDATED: Await result and handle modal visibility
   const onTimerComplete = async () => {
     try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch(e) {}
     await cleanupTimerState();
@@ -415,17 +479,14 @@ export const TimerPage = ({ navigation }) => {
     
     let autoSent = false;
 
-    // Trigger auto-alert if enabled
     if (isAutoAlertEnabled) {
-        // Wait for the result
         autoSent = await sendAutomaticPush();
     }
 
     if (autoSent) {
-        // If sent successfully, show alert and DO NOT open the modal
         Alert.alert("Timer Expired", "Automatic alerts sent to your linked contacts.");
     } else {
-        // If not sent (or disabled), open the manual options
+        playTimerSound(); // Start playing ringtone
         setTimerCompleteModalVisible(true);
     }
   };
@@ -453,11 +514,11 @@ export const TimerPage = ({ navigation }) => {
     const shouldShareLocation = shareLocation || forceLocation;
     try {
       if (!contacts || contacts.length === 0) {
-         Alert.alert('No Contacts', 'You have no emergency contacts to message.'); setTimerCompleteModalVisible(false); return;
+         Alert.alert('No Contacts', 'You have no emergency contacts to message.'); setTimerCompleteModalVisible(false); stopTimerSound(); return;
       }
       const recipients = contacts.map(c => c.phone).filter(Boolean);
       if (recipients.length === 0) {
-         Alert.alert('No Phone Numbers', 'Emergency contacts have no phone numbers.'); setTimerCompleteModalVisible(false); return;
+         Alert.alert('No Phone Numbers', 'Emergency contacts have no phone numbers.'); setTimerCompleteModalVisible(false); stopTimerSound(); return;
       }
       let name = 'Someone';
       const stored = await AsyncStorage.getItem('@user_credentials');
@@ -489,9 +550,6 @@ export const TimerPage = ({ navigation }) => {
     } catch (err) { console.error('Error notifying contacts', err); Alert.alert('Error', 'Could not notify contacts.'); }
     setTimerCompleteModalVisible(false); setCustomMessage(''); setShareLocation(false); cancelTimer();
   };
-
-  const progress = totalSeconds > 0 ? (totalSeconds - secondsLeft) / totalSeconds : 0;
-  const strokeDashoffset = CIRCLE_CIRCUMFERENCE - progress * CIRCLE_CIRCUMFERENCE;
 
   const renderSetup = () => {
     if (isLoadingDefaults) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={mainColor} /></View>;
@@ -532,6 +590,9 @@ export const TimerPage = ({ navigation }) => {
     const targetTime = timerFinishTimeRef.current || (Date.now() + secondsLeft * 1000);
     const endTime = new Date(targetTime);
     const endTimeString = endTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const progress = totalSeconds > 0 ? (totalSeconds - secondsLeft) / totalSeconds : 0;
+    const strokeDashoffset = CIRCLE_CIRCUMFERENCE - progress * CIRCLE_CIRCUMFERENCE;
+
     return (
       <>
         <View style={styles.progressContainer}>
@@ -570,6 +631,9 @@ export const TimerPage = ({ navigation }) => {
      const targetTime = Date.now() + secondsLeft * 1000;
      const endTime = new Date(targetTime);
      const endTimeString = endTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+     const progress = totalSeconds > 0 ? (totalSeconds - secondsLeft) / totalSeconds : 0;
+     const strokeDashoffset = CIRCLE_CIRCUMFERENCE - progress * CIRCLE_CIRCUMFERENCE;
+
      return (
        <>
          <View style={styles.progressContainer}>
@@ -604,7 +668,15 @@ export const TimerPage = ({ navigation }) => {
             <Text style={styles.modalTitle}>Timer Finished!</Text>
             <Text style={styles.modalSubtitle}>Choose an action:</Text>
             <TouchableOpacity style={styles.modalButton} onPress={() => sendMessage('late')}><Text style={styles.modalButtonText}>Send: "I'm running late but I'm fine."</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.modalButton} onPress={() => sendMessage('emergency')}><Text style={styles.modalButtonText}>Send: "Something bad happened. Send help."</Text></TouchableOpacity>
+            
+            {/* Modified Emergency Button */}
+            <TouchableOpacity 
+                style={[styles.modalButton, styles.emergencyButton]} 
+                onPress={() => sendMessage('emergency')}
+            >
+                <Text style={[styles.modalButtonText, styles.emergencyButtonText]}>Send: "Something bad happened. Send help."</Text>
+            </TouchableOpacity>
+
             <TextInput style={styles.modalTextInput} placeholder="Or type a custom message..." placeholderTextColor={dimmedTextColor} value={customMessage} onChangeText={setCustomMessage} />
             <TouchableOpacity style={[styles.modalButton, !customMessage.trim() && styles.modalButtonDisabled]} onPress={() => sendMessage('custom')} disabled={!customMessage.trim()}><Text style={styles.modalButtonText}>Send Custom Message</Text></TouchableOpacity>
             <View style={styles.locationToggle}>
@@ -648,6 +720,17 @@ const styles = StyleSheet.create({
   modalSubtitle: { fontSize: 16, color: dimmedTextColor, textAlign: 'center', marginBottom: 15 },
   modalButton: { backgroundColor: buttonBackgroundColor, padding: 15, borderRadius: 10, marginBottom: 8, alignItems: 'center' },
   modalButtonText: { color: mainColor, fontSize: 16, fontWeight: '500', textAlign: 'center' },
+  
+  // New Styles for Emergency Button
+  emergencyButton: {
+    backgroundColor: '#EF4444', 
+    borderWidth: 0,
+  },
+  emergencyButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+
   modalButtonDisabled: { backgroundColor: progressTrackColor },
   modalTextInput: { height: 50, borderColor: progressPausedColor, borderWidth: 1, borderRadius: 10, paddingHorizontal: 15, marginVertical: 8, fontSize: 16, color: textColor, backgroundColor: '#FFFFFF' },
   locationToggle: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 12 },
