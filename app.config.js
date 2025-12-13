@@ -8,7 +8,7 @@ export default {
     orientation: "portrait",
     icon: "./assets/icon.png",
     userInterfaceStyle: "light",
-    newArchEnabled: false,
+    newArchEnabled: true,
     splash: {
       image: "./assets/splash-icon.png",
       resizeMode: "contain",
@@ -19,10 +19,15 @@ export default {
       bundleIdentifier: "com.rafox2500.Yoursapp",
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
-        // These strings are required by Apple for location access
         NSMicrophoneUsageDescription: "Allow $(PRODUCT_NAME) to access your microphone to record audio journals.",
         NSLocationWhenInUseUsageDescription: "This app needs access to your location to track your journeys and geofences.",
-        NSLocationAlwaysAndWhenInUseUsageDescription: "This app needs background location access to monitor geofences even when the app is closed."
+        NSLocationAlwaysAndWhenInUseUsageDescription: "This app needs background location access to monitor geofences even when the app is closed.",
+        // UPDATED: Added UIBackgroundModes to allow audio and location in background
+        UIBackgroundModes: [
+          "audio",
+          "location",
+          "fetch"
+        ]
       }
     },
     android: {
@@ -32,12 +37,17 @@ export default {
       },
       edgeToEdgeEnabled: true,
       package: "com.rafox2500.Yoursapp",
-      // 👇 CRITICAL: This permissions section fixes your specific error
+      googleServicesFile: "./google-services.json", 
       permissions: [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
-        "RECORD_AUDIO" // <--- Add this line for Android
+        "ACCESS_MEDIA_LOCATION",
+        "ACCESS_NOTIFICATION_POLICY",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "RECORD_AUDIO",
+        "WAKE_LOCK" // Recommended for background timers
       ],
       config: {
         googleMaps: {
@@ -48,7 +58,6 @@ export default {
     web: {
       favicon: "./assets/favicon.png"
     },
-    // 👇 Recommended: Explicitly configure the location plugin
     plugins: [
       [
         "expo-location",

@@ -16,12 +16,12 @@ import {
   KeypadIcon,
 } from '../components/Icons';
 
-// Ringtone keys and default asset
 const RINGTONE_URI_KEY = '@fake_call_ringtone_uri'; 
+// The actual file asset
 const DEFAULT_RINGTONE_ASSET = require('../assets/sounds/ringtone.mp3'); 
-const DEFAULT_RINGTONE_PATH = '../assets/sounds/ringtone.mp3';
+// Sentinel value used in settings
+const DEFAULT_RINGTONE_VALUE = 'DEFAULT';
 
-// In-call action button component
 const InCallButton = ({ icon, text, onPress, isActive }) => (
   <TouchableOpacity style={styles.inCallButton} onPress={onPress}>
     <View style={[styles.inCallIconContainer, isActive && styles.inCallButtonActive]}>
@@ -31,15 +31,8 @@ const InCallButton = ({ icon, text, onPress, isActive }) => (
   </TouchableOpacity>
 );
 
-// Keypad component
 const Keypad = ({ onKeyPress, onHide }) => {
-  const buttons = [
-    '1', '2', '3',
-    '4', '5', '6',
-    '7', '8', '9',
-    '*', '0', '#',
-  ];
-
+  const buttons = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '*', '0', '#'];
   return (
     <View style={styles.keypadContainer}>
       <View style={styles.keypadGrid}>
@@ -62,32 +55,28 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
   const [isKeypadVisible, setKeypadVisible] = useState(false);
   const [keypadInput, setKeypadInput] = useState('');
   const [activeButtons, setActiveButtons] = useState({
-    speaker: false,
-    mute: false,
-    record: false,
-    hold: false,
-    bluetooth: false,
+    speaker: false, mute: false, record: false, hold: false, bluetooth: false,
   });
-  // State for dynamically loaded ringtone source
+  
   const [ringtoneSource, setRingtoneSource] = useState(DEFAULT_RINGTONE_ASSET);
-  // State to track if the ringtone setting has been loaded
   const [isRingtoneSettingsLoaded, setIsRingtoneSettingsLoaded] = useState(false); 
 
   const { contacts } = useEmergencyContacts();
   const pulseAnim = useRef(new Animated.Value(1)).current;
-  // We use a ref to track the currently playing sound to ensure we can always reach it for cleanup
   const soundRef = useRef(null);
   const navigation = useNavigation();
 
-  // Load custom ringtone URI from AsyncStorage on mount
+  // Load custom ringtone
   useEffect(() => {
     const loadRingtone = async () => {
         try {
             const storedUri = await AsyncStorage.getItem(RINGTONE_URI_KEY);
-            if (storedUri && storedUri !== DEFAULT_RINGTONE_PATH) {
-                setRingtoneSource({ uri: storedUri });
-            } else {
+            // Check for explicit "DEFAULT" or missing value
+            if (!storedUri || storedUri === DEFAULT_RINGTONE_VALUE) {
                 setRingtoneSource(DEFAULT_RINGTONE_ASSET);
+            } else {
+                // It's a custom file URI
+                setRingtoneSource({ uri: storedUri });
             }
         } catch (e) {
             console.error("Failed to load ringtone URI:", e);
@@ -99,7 +88,7 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
     loadRingtone();
   }, []);
 
-  // Pulsating animation for incoming call
+  // Pulse Animation
   useEffect(() => {
     if (callState === 'incoming') {
       const animation = Animated.loop(
@@ -113,7 +102,7 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
     }
   }, [callState, pulseAnim]);
 
-  // Secret SOS trigger
+  // Panic Trigger (505)
   useEffect(() => {
     if (keypadInput.endsWith('505')) {
       triggerPanicAlert();
@@ -122,18 +111,15 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
     }
   }, [keypadInput]);
 
-  // --- MAIN FIX: Robust Audio Logic with Cancellation Check ---
+  // Audio Playback
   useEffect(() => {
-    // 1. isCancelled flag tracks if this specific effect run has been cleaned up.
     let isCancelled = false;
     let soundObject = null;
 
     const playIncomingSound = async () => {
-        // If settings aren't loaded yet, don't play default to avoid glitches
         if (!isRingtoneSettingsLoaded) return;
 
         try {
-            // Configure audio session
             await Audio.setAudioModeAsync({ 
                 playsInSilentModeIOS: true, 
                 allowsRecordingIOS: false, 
@@ -141,54 +127,38 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
                 shouldDuckAndroid: true 
             });
             
-            // Create the sound. This is asynchronous and takes time.
             const { sound } = await Audio.Sound.createAsync(
                 ringtoneSource,
                 { isLooping: true }
             );
 
-            // 2. CRITICAL CHECK: 
-            // If the user answered, declined, or the component unmounted/remounted 
-            // *while* we were waiting for 'createAsync', isCancelled will be true.
             if (isCancelled) {
-                // We MUST unload immediately and NOT play.
                 await sound.unloadAsync(); 
                 return;
             }
 
-            // If we are safe, assign the sound to our refs and play.
             soundObject = sound;
             soundRef.current = sound;
-            
             await sound.playAsync();
             Vibration.vibrate([400, 1000], true);
 
         } catch (error) {
-            if (!isCancelled) {
-                console.warn("Could not play ringtone:", error);
-            }
+            if (!isCancelled) console.warn("Could not play ringtone:", error);
         }
     };
 
     if (callState === 'incoming') {
         playIncomingSound();
-    } else {
-        // If state is NOT incoming (e.g. answered/ended), we don't start sound.
-        // The cleanup function below handles stopping any existing sound.
     }
 
     // Cleanup function: runs when component unmounts OR when callState/settings change.
     return () => {
-        isCancelled = true; // Mark this run as cancelled immediately
+        isCancelled = true;
         Vibration.cancel();
-
-        // Stop and unload the sound object created in this effect
         if (soundObject) {
             soundObject.stopAsync().catch(() => {});
             soundObject.unloadAsync().catch(() => {});
         }
-        
-        // Also ensure global ref is cleared and unloaded if it exists
         if (soundRef.current) {
              soundRef.current.unloadAsync().catch(() => {});
              soundRef.current = null;
@@ -196,8 +166,7 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
     };
   }, [callState, ringtoneSource, isRingtoneSettingsLoaded]); 
 
-
-  // --- Call Timer Logic ---
+  // Timer
   useEffect(() => {
     let interval;
     if (callState === 'answered') {
@@ -206,22 +175,19 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
     return () => clearInterval(interval);
   }, [callState]);
 
-  // --- End Call Logic ---
+  // End Call Auto-Close
   useEffect(() => {
       if (callState === 'ended') {
         const timerId = setTimeout(() => {
             onEndCall?.();
             try {
-            navigation.setParams({ triggerFakeCall: false, triggerSudoku: false });
-            } catch (e) {
-            console.warn('Could not reset navigation params', e);
-            }
+                navigation.setParams({ triggerFakeCall: false });
+            } catch (e) {}
         }, 2000);
         return () => clearTimeout(timerId);
       }
   }, [callState]);
 
-  // Handlers - just update state. The useEffect above handles the audio stop automatically.
   const handleDecline = () => setCallState('ended');
   const handleAccept = () => setCallState('answered');
 
@@ -237,28 +203,25 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
 
   const triggerPanicAlert = async () => {
     if (contacts.length === 0) {
-      Alert.alert('No Emergency Contacts', 'Please add emergency contacts to use this feature.');
+      Alert.alert('No Contacts', 'Please add emergency contacts first.');
       return;
     }
-    let { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'Permission to access location was denied.');
-      return;
-    }
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') return;
+
     try {
-      let location = await Location.getCurrentPositionAsync({});
-      const { latitude, longitude } = location.coords;
-      const message = `Emergency! I need help. My location: https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
-      const recipients = contacts.map(c => c.phone);
-      const isAvailable = await SMS.isAvailableAsync();
-      if (isAvailable) {
+      const loc = await Location.getCurrentPositionAsync({});
+      const { latitude, longitude } = loc.coords;
+      const message = `Emergency! I need help. Location: http://maps.google.com/?q=${latitude},${longitude}`;
+      const recipients = contacts.map(c => c.phone).filter(Boolean);
+      
+      if (await SMS.isAvailableAsync()) {
         await SMS.sendSMSAsync(recipients, message);
       } else {
-        Alert.alert('SMS Not Available', 'SMS is not available on this device.');
+        Alert.alert('Error', 'SMS is not available.');
       }
     } catch (error) {
-      console.error("Failed to send alert:", error);
-      Alert.alert('Error', 'Could not get location or send SMS.');
+      console.error("Panic failed:", error);
     }
   };
 

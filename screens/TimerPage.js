@@ -24,23 +24,24 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import BackgroundTimer from 'react-native-background-timer';
+import { sendBulkPushNotifications, getUserToken } from '../services/expoPushService';
+// UPDATED IMPORTS: Added interruption modes
+import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 
-// --- NEW IMPORTS FOR NOTIFICATION HANDLING ---
 import { 
   TIMER_EXPIRED_CATEGORY, 
   dismissNonSafetyNotifications 
 } from '../services/NotificationActionService';
 
-// --- Constants ---
 const ITEM_HEIGHT = 50;
 const VISIBLE_ITEMS = 3;
 const screenWidth = Dimensions.get('window').width;
 const LAST_TIMER_KEY = '@last_timer_duration';
 const TIMER_END_TIME_KEY = '@timer_end_time';
 const TIMER_TOTAL_SECONDS_KEY = '@timer_total_seconds';
+const TIMER_AUTO_ALERT_KEY = '@timer_auto_alert_enabled'; 
 const NOTIFICATION_CHANNEL_ID = 'timer-channel';
 
-// --- Light Theme Colors ---
 const mainColor = '#F87171';
 const backgroundColor = '#FFF8F8';
 const textColor = '#1F2937';
@@ -53,7 +54,6 @@ const CIRCLE_RADIUS = screenWidth * 0.3;
 const CIRCLE_STROKE_WIDTH = 10;
 const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * CIRCLE_RADIUS;
 
-// --- Helper: Time Formatting ---
 const formatTime = (secs) => {
   const h = Math.floor(secs / 3600);
   const m = Math.floor((secs % 3600) / 60);
@@ -61,7 +61,6 @@ const formatTime = (secs) => {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 };
 
-// --- Helper: Wheel Picker Component ---
 const WheelPicker = ({ data, selectedValue, onSelect, label }) => {
   const scrollViewRef = useRef(null);
   const wheelHeight = ITEM_HEIGHT * VISIBLE_ITEMS;
@@ -123,9 +122,6 @@ const WheelPicker = ({ data, selectedValue, onSelect, label }) => {
   );
 };
 
-// --- NOTIFICATION HANDLER SETUP ---
-// Note: The main handler in NotificationActionService.js might override this globally depending on import order,
-// but keeping it here ensures Timer behaves as expected when focused.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
@@ -136,7 +132,6 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// --- Timer Page Component ---
 export const TimerPage = ({ navigation }) => {
   const { contacts } = useEmergencyContacts();
   const [selectedHour, setSelectedHour] = useState(0);
@@ -148,6 +143,9 @@ export const TimerPage = ({ navigation }) => {
   const [isLoadingDefaults, setIsLoadingDefaults] = useState(true);
   const [isStarting, setIsStarting] = useState(false);
   
+  const [isAutoAlertEnabled, setIsAutoAlertEnabled] = useState(false); 
+  const [sound, setSound] = useState(); // State for sound playback
+
   const timerFinishTimeRef = useRef(null);
   const appState = useRef(AppState.currentState);
 
@@ -158,9 +156,8 @@ export const TimerPage = ({ navigation }) => {
   const HOURS = Array.from({ length: 24 }, (_, i) => i);
   const MINUTES_SECONDS = Array.from({ length: 60 }, (_, i) => i);
 
-  // --- Load last timer duration ---
   useEffect(() => {
-    const loadLastTimer = async () => {
+    const loadData = async () => {
       try {
         const storedDuration = await AsyncStorage.getItem(LAST_TIMER_KEY);
         if (storedDuration) {
@@ -169,16 +166,20 @@ export const TimerPage = ({ navigation }) => {
           setSelectedMinute(Number(minute) || 0);
           setSelectedSecond(Number(second) || 0);
         }
+        // Load toggle preference
+        const autoAlert = await AsyncStorage.getItem(TIMER_AUTO_ALERT_KEY);
+        if (autoAlert !== null) {
+            setIsAutoAlertEnabled(JSON.parse(autoAlert));
+        }
       } catch (error) {
-        console.error('Error loading last timer duration:', error);
+        console.error('Error loading data:', error);
       } finally {
         setIsLoadingDefaults(false);
       }
     };
-    loadLastTimer();
+    loadData();
   }, []);
 
-  // --- NOTIFICATION & APP STATE SETUP ---
   useEffect(() => {
     const setupNotifications = async () => {
       if (Platform.OS === 'android') {
@@ -205,12 +206,7 @@ export const TimerPage = ({ navigation }) => {
 
     setupNotifications();
 
-    // We rely on the global listener in App.js for background/killed states now,
-    // but keeping a local one for when the app is already open can be useful as a fallback,
-    // though the modal should handle it. 
-    // Actually, if App.js handles it globally, we might not strictly need this if it routes here.
     const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
-       // If we are already on this page, just ensure the modal is visible.
        if (response.notification.request.content.categoryIdentifier === TIMER_EXPIRED_CATEGORY) {
            setTimerCompleteModalVisible(true);
        }
@@ -223,11 +219,18 @@ export const TimerPage = ({ navigation }) => {
     };
   }, []);
 
-  // --- APP STATE HANDLING ---
+  // Cleanup sound when component unmounts or sound changes
+  useEffect(() => {
+    return sound
+      ? () => {
+          sound.unloadAsync();
+        }
+      : undefined;
+  }, [sound]);
+
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async nextAppState => {
       if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
-        // Sync up on return.
         const endTimeString = await AsyncStorage.getItem(TIMER_END_TIME_KEY);
         if (endTimeString) {
           const endTime = parseInt(endTimeString, 10);
@@ -263,7 +266,44 @@ export const TimerPage = ({ navigation }) => {
     await AsyncStorage.removeItem(TIMER_TOTAL_SECONDS_KEY);
   };
 
-  // --- BACKGROUND-CAPABLE TIMER LOGIC ---
+  // UPDATED: Robust Audio Player for Background
+  const playTimerSound = async () => {
+    try {
+        // Activate the audio session explicitly before creating the sound
+        // This is required to grab focus in the background on iOS
+        await Audio.setAudioModeAsync({
+            allowsRecordingIOS: false,
+            staysActiveInBackground: true,
+            interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+            playsInSilentModeIOS: true,
+            shouldDuckAndroid: true,
+            interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+            playThroughEarpieceAndroid: false,
+        });
+
+        const { sound } = await Audio.Sound.createAsync(
+            require('../assets/sounds/ringtone.mp3'),
+            { shouldPlay: true, isLooping: true }
+        );
+        setSound(sound);
+        // We do not need sound.playAsync() here because shouldPlay: true handles it
+    } catch (e) {
+        console.error("Failed to play timer sound:", e);
+    }
+  };
+
+  const stopTimerSound = async () => {
+    if (sound) {
+        try {
+            await sound.stopAsync();
+            await sound.unloadAsync();
+        } catch (e) {
+            console.log("Error stopping sound", e);
+        }
+        setSound(null);
+    }
+  };
+
   useEffect(() => {
     if (isRunning && timerFinishTimeRef.current !== null) {
       BackgroundTimer.runBackgroundTimer(() => {
@@ -275,14 +315,12 @@ export const TimerPage = ({ navigation }) => {
           setSecondsLeft(0);
 
           if (AppState.currentState.match(/inactive|background/)) {
-              // --- UPDATED NOTIFICATION SCHEDULING ---
               Notifications.scheduleNotificationAsync({
                   content: {
                       title: "⏰ Timer Finished!",
                       body: "Tap here to open the app and choose an action.",
                       sound: true,
                       priority: Notifications.AndroidNotificationPriority.HIGH,
-                      // ADDED CATEGORY HERE:
                       categoryIdentifier: TIMER_EXPIRED_CATEGORY, 
                   },
                   trigger: null,
@@ -303,12 +341,17 @@ export const TimerPage = ({ navigation }) => {
     };
   }, [isRunning]); 
 
-  // --- ACTIONS ---
+  const toggleAutoAlert = async (value) => {
+    setIsAutoAlertEnabled(value);
+    await AsyncStorage.setItem(TIMER_AUTO_ALERT_KEY, JSON.stringify(value));
+  };
+
   const startTimer = async () => {
     if (isStarting) return;
     setIsStarting(true);
 
-    Vibration.cancel(); 
+    Vibration.cancel();
+    stopTimerSound(); 
     setTimerCompleteModalVisible(false);
     stopBackgroundTicker();
 
@@ -324,7 +367,6 @@ export const TimerPage = ({ navigation }) => {
     }
 
     try {
-      // --- CHANGED: Use safe dismiss to protect the banner ---
       await dismissNonSafetyNotifications();
       await Notifications.cancelAllScheduledNotificationsAsync();
 
@@ -335,6 +377,21 @@ export const TimerPage = ({ navigation }) => {
       setTotalSeconds(total);
       setSecondsLeft(total);
       setIsRunning(true);
+
+      // Pre-configure audio for background when timer starts (best practice)
+      try {
+        await Audio.setAudioModeAsync({
+            allowsRecordingIOS: false,
+            staysActiveInBackground: true,
+            interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+            playsInSilentModeIOS: true,
+            shouldDuckAndroid: true,
+            interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+            playThroughEarpieceAndroid: false,
+        });
+      } catch (audioErr) {
+          console.log("Warning: Could not pre-configure audio", audioErr);
+      }
 
       await AsyncStorage.setItem(LAST_TIMER_KEY, JSON.stringify({ hour: h, minute: m, second: s }));
       await AsyncStorage.setItem(TIMER_END_TIME_KEY, String(targetEndTime));
@@ -365,6 +422,7 @@ export const TimerPage = ({ navigation }) => {
   };
 
   const cancelTimer = async () => {
+    stopTimerSound();
     stopBackgroundTicker();
     cleanupTimerState();
     try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch(e) {}
@@ -380,11 +438,57 @@ export const TimerPage = ({ navigation }) => {
     }
   };
 
+  const sendAutomaticPush = async () => {
+      const contactsWithApp = contacts.filter(c => c.linkedAppUserId);
+      if (contactsWithApp.length === 0) {
+          console.log("No linked contacts found for auto-push.");
+          return false;
+      }
+
+      try {
+          const location = await Location.getCurrentPositionAsync({});
+          const { latitude, longitude } = location.coords;
+          const googleMapsUrl = `http://googleusercontent.com/maps.google.com/?q=${latitude},${longitude}`;
+          
+          const tokens = [];
+          for (const contact of contactsWithApp) {
+              const token = await getUserToken(contact.linkedAppUserId);
+              if (token) tokens.push(token);
+          }
+
+          if (tokens.length > 0) {
+              await sendBulkPushNotifications(
+                  tokens,
+                  "⏰ TIMER EXPIRED",
+                  "My safety timer finished and I haven't responded. Please check on me.",
+                  { latitude, longitude, url: googleMapsUrl, type: 'TIMER_EXPIRED' }
+              );
+              console.log("Auto timer push sent.");
+              return true; 
+          }
+      } catch (error) {
+          console.error("Failed to send auto push:", error);
+      }
+      return false; 
+  };
+
   const onTimerComplete = async () => {
     try { await Notifications.cancelAllScheduledNotificationsAsync(); } catch(e) {}
     await cleanupTimerState();
     Vibration.vibrate(Platform.OS === 'android' ? [0, 500, 500, 500] : [500, 500, 500]);
-    setTimerCompleteModalVisible(true);
+    
+    let autoSent = false;
+
+    if (isAutoAlertEnabled) {
+        autoSent = await sendAutomaticPush();
+    }
+
+    if (autoSent) {
+        Alert.alert("Timer Expired", "Automatic alerts sent to your linked contacts.");
+    } else {
+        playTimerSound(); // Start playing ringtone
+        setTimerCompleteModalVisible(true);
+    }
   };
 
   const requestLocationPermissionsAsync = async () => {
@@ -410,11 +514,11 @@ export const TimerPage = ({ navigation }) => {
     const shouldShareLocation = shareLocation || forceLocation;
     try {
       if (!contacts || contacts.length === 0) {
-         Alert.alert('No Contacts', 'You have no emergency contacts to message.'); setTimerCompleteModalVisible(false); return;
+         Alert.alert('No Contacts', 'You have no emergency contacts to message.'); setTimerCompleteModalVisible(false); stopTimerSound(); return;
       }
       const recipients = contacts.map(c => c.phone).filter(Boolean);
       if (recipients.length === 0) {
-         Alert.alert('No Phone Numbers', 'Emergency contacts have no phone numbers.'); setTimerCompleteModalVisible(false); return;
+         Alert.alert('No Phone Numbers', 'Emergency contacts have no phone numbers.'); setTimerCompleteModalVisible(false); stopTimerSound(); return;
       }
       let name = 'Someone';
       const stored = await AsyncStorage.getItem('@user_credentials');
@@ -447,9 +551,6 @@ export const TimerPage = ({ navigation }) => {
     setTimerCompleteModalVisible(false); setCustomMessage(''); setShareLocation(false); cancelTimer();
   };
 
-  const progress = totalSeconds > 0 ? (totalSeconds - secondsLeft) / totalSeconds : 0;
-  const strokeDashoffset = CIRCLE_CIRCUMFERENCE - progress * CIRCLE_CIRCUMFERENCE;
-
   const renderSetup = () => {
     if (isLoadingDefaults) return <View style={styles.loadingContainer}><ActivityIndicator size="large" color={mainColor} /></View>;
     return (
@@ -465,6 +566,19 @@ export const TimerPage = ({ navigation }) => {
           <TouchableOpacity style={styles.presetButton} onPress={() => setPreset(0, 45, 0)}><Text style={styles.presetButtonText}>45:00</Text></TouchableOpacity>
           <TouchableOpacity style={styles.presetButton} onPress={() => setPreset(1, 0, 0)}><Text style={styles.presetButtonText}>1:00:00</Text></TouchableOpacity>
         </View>
+        
+        {/* Toggle for Auto Alert */}
+        <View style={styles.toggleContainer}>
+            <Text style={styles.toggleLabel}>Auto-notify App Users</Text>
+            <Switch 
+                trackColor={{ false: "#767577", true: mainColor }}
+                thumbColor={isAutoAlertEnabled ? "#fff" : "#f4f3f4"}
+                onValueChange={toggleAutoAlert}
+                value={isAutoAlertEnabled}
+            />
+        </View>
+        {isAutoAlertEnabled && <Text style={styles.toggleHelper}>App users will be notified automatically when timer ends.</Text>}
+
         <TouchableOpacity style={[styles.controlButton, isStarting && { opacity: 0.5 }]} onPress={startTimer} disabled={isStarting}>
           {isStarting ? <ActivityIndicator color={backgroundColor} /> : <Svg width="32" height="32" viewBox="0 0 24 24" fill={backgroundColor}><Path d="M8 5v14l11-7z" /></Svg>}
         </TouchableOpacity>
@@ -476,6 +590,9 @@ export const TimerPage = ({ navigation }) => {
     const targetTime = timerFinishTimeRef.current || (Date.now() + secondsLeft * 1000);
     const endTime = new Date(targetTime);
     const endTimeString = endTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const progress = totalSeconds > 0 ? (totalSeconds - secondsLeft) / totalSeconds : 0;
+    const strokeDashoffset = CIRCLE_CIRCUMFERENCE - progress * CIRCLE_CIRCUMFERENCE;
+
     return (
       <>
         <View style={styles.progressContainer}>
@@ -514,6 +631,9 @@ export const TimerPage = ({ navigation }) => {
      const targetTime = Date.now() + secondsLeft * 1000;
      const endTime = new Date(targetTime);
      const endTimeString = endTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+     const progress = totalSeconds > 0 ? (totalSeconds - secondsLeft) / totalSeconds : 0;
+     const strokeDashoffset = CIRCLE_CIRCUMFERENCE - progress * CIRCLE_CIRCUMFERENCE;
+
      return (
        <>
          <View style={styles.progressContainer}>
@@ -548,7 +668,15 @@ export const TimerPage = ({ navigation }) => {
             <Text style={styles.modalTitle}>Timer Finished!</Text>
             <Text style={styles.modalSubtitle}>Choose an action:</Text>
             <TouchableOpacity style={styles.modalButton} onPress={() => sendMessage('late')}><Text style={styles.modalButtonText}>Send: "I'm running late but I'm fine."</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.modalButton} onPress={() => sendMessage('emergency')}><Text style={styles.modalButtonText}>Send: "Something bad happened. Send help."</Text></TouchableOpacity>
+            
+            {/* Modified Emergency Button */}
+            <TouchableOpacity 
+                style={[styles.modalButton, styles.emergencyButton]} 
+                onPress={() => sendMessage('emergency')}
+            >
+                <Text style={[styles.modalButtonText, styles.emergencyButtonText]}>Send: "Something bad happened. Send help."</Text>
+            </TouchableOpacity>
+
             <TextInput style={styles.modalTextInput} placeholder="Or type a custom message..." placeholderTextColor={dimmedTextColor} value={customMessage} onChangeText={setCustomMessage} />
             <TouchableOpacity style={[styles.modalButton, !customMessage.trim() && styles.modalButtonDisabled]} onPress={() => sendMessage('custom')} disabled={!customMessage.trim()}><Text style={styles.modalButtonText}>Send Custom Message</Text></TouchableOpacity>
             <View style={styles.locationToggle}>
@@ -592,10 +720,24 @@ const styles = StyleSheet.create({
   modalSubtitle: { fontSize: 16, color: dimmedTextColor, textAlign: 'center', marginBottom: 15 },
   modalButton: { backgroundColor: buttonBackgroundColor, padding: 15, borderRadius: 10, marginBottom: 8, alignItems: 'center' },
   modalButtonText: { color: mainColor, fontSize: 16, fontWeight: '500', textAlign: 'center' },
+  
+  // New Styles for Emergency Button
+  emergencyButton: {
+    backgroundColor: '#EF4444', 
+    borderWidth: 0,
+  },
+  emergencyButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+
   modalButtonDisabled: { backgroundColor: progressTrackColor },
   modalTextInput: { height: 50, borderColor: progressPausedColor, borderWidth: 1, borderRadius: 10, paddingHorizontal: 15, marginVertical: 8, fontSize: 16, color: textColor, backgroundColor: '#FFFFFF' },
   locationToggle: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 12 },
   locationToggleText: { fontSize: 16, color: textColor },
   modalCloseButton: { backgroundColor: 'transparent', borderWidth: 1, borderColor: dimmedTextColor, marginTop: 10 },
   modalCloseButtonText: { color: dimmedTextColor },
+  toggleContainer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 5 },
+  toggleLabel: { fontSize: 16, color: textColor, marginRight: 10 },
+  toggleHelper: { fontSize: 12, color: dimmedTextColor, textAlign: 'center', marginBottom: 15 },
 });
