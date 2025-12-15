@@ -129,11 +129,11 @@ export const ContactsPage = ({ navigation }) => {
 
       <ContactFormModal
         visible={formVisible}
-        contact={editingContact}
+        initialData={editingContact} // CHANGED: 'contact' to 'initialData'
         onClose={() => setFormVisible(false)}
         onSave={handleSaveContact}
-      />
-
+        />
+        
       <ContactImportModal
         visible={importVisible}
         onClose={() => setImportVisible(false)}

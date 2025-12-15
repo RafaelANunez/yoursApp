@@ -7,8 +7,10 @@ import * as DocumentPicker from 'expo-document-picker';
 // Define keys for the new settings
 const PANIC_DURATION_KEY = '@panic_press_duration';
 const RINGTONE_URI_KEY = '@fake_call_ringtone_uri';
+const SOS_CODE_KEY = '@fake_call_sos_code'; // NEW KEY
 const DEFAULT_PANIC_DURATION = 3;
-const DEFAULT_RINGTONE_VALUE = 'DEFAULT'; // Sentinel value for the built-in ringtone
+const DEFAULT_RINGTONE_VALUE = 'DEFAULT';
+const DEFAULT_SOS_CODE = '505'; // Default code
 
 // Helper to safely parse and default a value
 const safeParseInt = (text, defaultValue) => {
@@ -33,6 +35,7 @@ const FakeCallSettingsPage = ({ navigation, settings, onSave }) => {
   // Persistent Settings
   const [panicDuration, setPanicDuration] = useState(DEFAULT_PANIC_DURATION);
   const [ringtoneUri, setRingtoneUri] = useState(DEFAULT_RINGTONE_VALUE);
+  const [sosCode, setSosCode] = useState(DEFAULT_SOS_CODE); // NEW STATE
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -42,6 +45,9 @@ const FakeCallSettingsPage = ({ navigation, settings, onSave }) => {
 
         const uri = await AsyncStorage.getItem(RINGTONE_URI_KEY);
         if (uri !== null) setRingtoneUri(uri);
+
+        const code = await AsyncStorage.getItem(SOS_CODE_KEY); // LOAD SOS CODE
+        if (code !== null) setSosCode(code);
         
         const storedCallerName = await AsyncStorage.getItem('@fake_call_caller_name');
         if (storedCallerName !== null) setCallerName(storedCallerName);
@@ -62,6 +68,7 @@ const FakeCallSettingsPage = ({ navigation, settings, onSave }) => {
             volumeHoldDuration: safeParseInt(volumeHoldDuration, 0),
             panicDuration: safeParseInt(panicDuration, DEFAULT_PANIC_DURATION),
             ringtoneUri,
+            sosCode: sosCode.trim() || DEFAULT_SOS_CODE,
         };
         
         await AsyncStorage.multiSet([
@@ -72,6 +79,7 @@ const FakeCallSettingsPage = ({ navigation, settings, onSave }) => {
             ['@fake_call_volume_hold_duration', String(newSettings.volumeHoldDuration)],
             [PANIC_DURATION_KEY, String(newSettings.panicDuration)],
             [RINGTONE_URI_KEY, newSettings.ringtoneUri],
+            [SOS_CODE_KEY, newSettings.sosCode], // SAVE SOS CODE
         ]);
 
         if (onSave) onSave(newSettings);
@@ -145,6 +153,22 @@ const FakeCallSettingsPage = ({ navigation, settings, onSave }) => {
         <View style={styles.settingsSection}>
           <Text style={styles.sectionTitle}>Triggers</Text>
           
+          {/* NEW: SOS Code Input */}
+          <View style={styles.settingItem}>
+            <View style={styles.settingInfo}>
+                <Text style={styles.settingLabel}>SOS Code</Text>
+                <Text style={styles.subText}>Keypad combination during fake call</Text>
+            </View>
+            <TextInput
+              style={styles.input}
+              value={sosCode}
+              onChangeText={setSosCode}
+              keyboardType="number-pad"
+              maxLength={4}
+              placeholder="505"
+            />
+          </View>
+
           <View style={styles.settingItem}>
             <Text style={styles.settingLabel}>Panic Button Hold (seconds)</Text>
             <TextInput
@@ -224,16 +248,16 @@ const styles = StyleSheet.create({
   settingInfo: { flex: 1, marginRight: 10 },
   settingLabel: { fontSize: 16, fontWeight: '500', color: '#1F2937' },
   subText: { fontSize: 13, color: '#6B7280', marginTop: 2 },
-  input: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, padding: 10, fontSize: 16, width: 60, textAlign: 'center', backgroundColor: '#FFF' },
+  input: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, padding: 10, fontSize: 16, width: 70, textAlign: 'center', backgroundColor: '#FFF' },
   inputWide: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, padding: 10, fontSize: 16, flex: 0.6, textAlign: 'right', backgroundColor: '#FFF' },
   buttonGroup: { flexDirection: 'row', alignItems: 'center' },
   miniButton: { backgroundColor: '#FEE2E2', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6, marginLeft: 8, borderWidth: 1, borderColor: '#F87171' },
   resetButton: { backgroundColor: '#F3F4F6', borderColor: '#D1D5DB' },
   miniButtonText: { color: '#F87171', fontSize: 12, fontWeight: '600' },
-  toggle: { width: 50, height: 30, borderRadius: 15, backgroundColor: '#E5E7EB', justifyContent: 'center', padding: 2 },
-  toggleActive: { backgroundColor: '#F87171' },
-  toggleCircle: { width: 26, height: 26, borderRadius: 13, backgroundColor: 'white', alignSelf: 'flex-start' },
-  toggleCircleActive: { alignSelf: 'flex-end' },
+  toggle: { width: 50, height: 30, borderRadius: 15, backgroundColor: 'white', justifyContent: 'center', padding: 2, borderWidth: 1, borderColor: '#E5E7EB' },
+  toggleActive: { backgroundColor: '#F87171', borderColor: '#F87171' },
+  toggleCircle: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#E5E7EB', alignSelf: 'flex-start' },
+  toggleCircleActive: { alignSelf: 'flex-end', backgroundColor: 'white' },
   saveButton: { backgroundColor: '#F87171', padding: 15, borderRadius: 8, margin: 20, alignItems: 'center' },
   saveButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
 });

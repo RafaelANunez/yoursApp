@@ -46,7 +46,6 @@ export default function LoginScreen({ navigation }) {
     }
   };
 
-  // --- NEW: Google Login Handler ---
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     try {
@@ -57,6 +56,27 @@ export default function LoginScreen({ navigation }) {
       Alert.alert('Google Login Failed', error.message || 'Could not sign in with Google.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // --- NEW: Forgot Password Handler ---
+  const handleForgotPassword = async () => {
+    if (!email) {
+      Alert.alert('Forgot Password', 'Please enter your email address in the field above so we can send you a reset link.');
+      return;
+    }
+    
+    if (!email.includes('@')) {
+      Alert.alert('Invalid Email', 'Please enter a valid email address.');
+      return;
+    }
+
+    try {
+      await auth.resetPassword(email.trim());
+      Alert.alert('Email Sent', 'Please check your email for instructions to reset your password.');
+    } catch (error) {
+      console.error('Forgot password error:', error);
+      Alert.alert('Error', error.message || 'Failed to send password reset email.');
     }
   };
 
@@ -108,7 +128,8 @@ export default function LoginScreen({ navigation }) {
             />
           </View>
 
-          <TouchableOpacity style={styles.forgotPasswordButton} onPress={() => Alert.alert('Forgot Password', 'Feature to be implemented.')}>
+          {/* --- UPDATED: Forgot Password Button --- */}
+          <TouchableOpacity style={styles.forgotPasswordButton} onPress={handleForgotPassword}>
             <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
           </TouchableOpacity>
 
@@ -130,7 +151,6 @@ export default function LoginScreen({ navigation }) {
               <Text style={styles.socialButtonText}>Facebook</Text>
             </TouchableOpacity>
             
-            {/* --- MODIFIED: Google Button connected to handleGoogleLogin --- */}
             <TouchableOpacity 
               style={[styles.socialButton, styles.googleButton]}
               onPress={handleGoogleLogin}

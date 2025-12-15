@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image, Vibration, Alert, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Image, Vibration, Alert, Animated, Dimensions } from 'react-native';
 import { Audio } from 'expo-av';
 import * as Location from 'expo-location';
 import * as SMS from 'expo-sms';
@@ -17,10 +17,13 @@ import {
 } from '../components/Icons';
 
 const RINGTONE_URI_KEY = '@fake_call_ringtone_uri'; 
-// The actual file asset
+const SOS_CODE_KEY = '@fake_call_sos_code'; 
 const DEFAULT_RINGTONE_ASSET = require('../assets/sounds/ringtone.mp3'); 
-// Sentinel value used in settings
 const DEFAULT_RINGTONE_VALUE = 'DEFAULT';
+const DEFAULT_SOS_CODE = '505';
+
+// Get screen height to make layout responsive
+const { height } = Dimensions.get('window');
 
 const InCallButton = ({ icon, text, onPress, isActive }) => (
   <TouchableOpacity style={styles.inCallButton} onPress={onPress}>
@@ -59,33 +62,36 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
   });
   
   const [ringtoneSource, setRingtoneSource] = useState(DEFAULT_RINGTONE_ASSET);
-  const [isRingtoneSettingsLoaded, setIsRingtoneSettingsLoaded] = useState(false); 
+  const [sosCode, setSosCode] = useState(DEFAULT_SOS_CODE);
+  const [isSettingsLoaded, setIsSettingsLoaded] = useState(false); 
 
   const { contacts } = useEmergencyContacts();
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const soundRef = useRef(null);
   const navigation = useNavigation();
 
-  // Load custom ringtone
+  // Load custom settings
   useEffect(() => {
-    const loadRingtone = async () => {
+    const loadSettings = async () => {
         try {
             const storedUri = await AsyncStorage.getItem(RINGTONE_URI_KEY);
-            // Check for explicit "DEFAULT" or missing value
             if (!storedUri || storedUri === DEFAULT_RINGTONE_VALUE) {
                 setRingtoneSource(DEFAULT_RINGTONE_ASSET);
             } else {
-                // It's a custom file URI
                 setRingtoneSource({ uri: storedUri });
             }
+
+            const storedCode = await AsyncStorage.getItem(SOS_CODE_KEY);
+            if (storedCode) {
+                setSosCode(storedCode);
+            }
         } catch (e) {
-            console.error("Failed to load ringtone URI:", e);
-            setRingtoneSource(DEFAULT_RINGTONE_ASSET);
+            console.error("Failed to load fake call settings:", e);
         } finally {
-            setIsRingtoneSettingsLoaded(true); 
+            setIsSettingsLoaded(true); 
         }
     };
-    loadRingtone();
+    loadSettings();
   }, []);
 
   // Pulse Animation
@@ -102,14 +108,14 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
     }
   }, [callState, pulseAnim]);
 
-  // Panic Trigger (505)
+  // Panic Trigger
   useEffect(() => {
-    if (keypadInput.endsWith('505')) {
+    if (keypadInput.endsWith(sosCode)) {
       triggerPanicAlert();
       setKeypadInput('');
       Alert.alert('Panic Activated', 'Your location has been sent to your emergency contacts.');
     }
-  }, [keypadInput]);
+  }, [keypadInput, sosCode]);
 
   // Audio Playback
   useEffect(() => {
@@ -117,7 +123,7 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
     let soundObject = null;
 
     const playIncomingSound = async () => {
-        if (!isRingtoneSettingsLoaded) return;
+        if (!isSettingsLoaded) return;
 
         try {
             await Audio.setAudioModeAsync({ 
@@ -151,7 +157,6 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
         playIncomingSound();
     }
 
-    // Cleanup function: runs when component unmounts OR when callState/settings change.
     return () => {
         isCancelled = true;
         Vibration.cancel();
@@ -164,7 +169,7 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
              soundRef.current = null;
         }
     };
-  }, [callState, ringtoneSource, isRingtoneSettingsLoaded]); 
+  }, [callState, ringtoneSource, isSettingsLoaded]); 
 
   // Timer
   useEffect(() => {
@@ -226,7 +231,7 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
   };
 
   const renderIncomingCall = () => (
-    <View style={[styles.container, styles.gradient]}>
+    <View style={[styles.container, styles.gradient, { paddingTop: 60 }]}>
       <View style={styles.header}><Text style={styles.headerText}>Incoming call</Text></View>
       <View style={styles.callerInfoContainer}>
         <Text style={styles.callerName}>{callerName}</Text>
@@ -251,13 +256,26 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
   const renderAnsweredCall = () => (
     <View style={[styles.container, styles.gradient]}>
       <View style={styles.header}><Text style={styles.headerText}>{formatTime()}</Text></View>
+      
+      {/* Caller Info Section */}
       <View style={styles.callerInfoContainer}>
         <Text style={styles.callerName}>{callerName}</Text>
         <Text style={styles.callerSubtext}>Mobile</Text>
-        <Image source={{ uri: `https://placehold.co/100x100/eab308/000000?text=${callerName.substring(0,2)}` }} style={styles.avatar} />
-        {isKeypadVisible && <Text style={styles.keypadDisplay}>{keypadInput}</Text>}
+        
+        {/* HIDE AVATAR WHEN KEYPAD IS OPEN TO SAVE SPACE */}
+        {!isKeypadVisible && (
+          <Image 
+            source={{ uri: `https://placehold.co/100x100/eab308/000000?text=${callerName.substring(0,2)}` }} 
+            style={styles.avatar} 
+          />
+        )}
       </View>
+      
+      {/* Actions / Keypad Section */}
       <View style={styles.inCallActions}>
+        {/* Show number display only when keypad is visible */}
+        {isKeypadVisible && <Text style={styles.keypadDisplay}>{keypadInput}</Text>}
+
         {isKeypadVisible ? (
           <Keypad onKeyPress={(char) => setKeypadInput(prev => prev + char)} onHide={() => setKeypadVisible(false)} />
         ) : (
@@ -274,7 +292,9 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
             </View>
           </>
         )}
-        <TouchableOpacity style={[styles.callButton, styles.declineButton, { marginTop: 30 }]} onPress={handleDecline}>
+        
+        {/* Decline Button */}
+        <TouchableOpacity style={[styles.callButton, styles.declineButton, { marginTop: isKeypadVisible ? 10 : 30 }]} onPress={handleDecline}>
           <PhoneIcon style={{ transform: [{ rotate: '135deg' }] }} />
         </TouchableOpacity>
       </View>
@@ -297,28 +317,52 @@ export const FakeCallScreen = ({ onEndCall, callerName }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'space-between', paddingTop: 60, paddingBottom: 80 },
+  container: { 
+    flex: 1, 
+    justifyContent: 'space-between', 
+    paddingTop: height > 700 ? 80 : 60, 
+    paddingBottom: 40 
+  },
   gradient: { backgroundColor: '#343a40' },
-  header: { alignItems: 'center' },
+  header: { alignItems: 'center', marginBottom: 10 },
   headerText: { color: 'white', fontSize: 18 },
-  callerInfoContainer: { alignItems: 'center', justifyContent: 'center', flex: 1 },
-  callerName: { fontSize: 38, color: 'white', fontWeight: '400' },
-  callerSubtext: { fontSize: 18, color: '#ccc', marginTop: 4 },
-  avatar: { width: 120, height: 120, borderRadius: 60, marginTop: 40 },
-  actionsContainer: { flexDirection: 'row', justifyContent: 'space-around', width: '100%' },
+  
+  callerInfoContainer: { 
+    alignItems: 'center', 
+    justifyContent: 'flex-start', 
+    flex: 1, 
+    marginTop: 10 
+  },
+  
+  callerName: { fontSize: 34, color: 'white', fontWeight: '400' },
+  callerSubtext: { fontSize: 16, color: '#ccc', marginTop: 4 },
+  avatar: { width: 120, height: 120, borderRadius: 60, marginTop: 30 },
+  
+  actionsContainer: { flexDirection: 'row', justifyContent: 'space-around', width: '100%', marginBottom: 40 },
   callButton: { width: 70, height: 70, borderRadius: 35, justifyContent: 'center', alignItems: 'center' },
   declineButton: { backgroundColor: '#e63946' },
   acceptButton: { backgroundColor: '#2a9d8f' },
-  inCallActions: { width: '100%', paddingHorizontal: 20, alignItems: 'center' },
+  
+  inCallActions: { width: '100%', paddingHorizontal: 20, alignItems: 'center', paddingBottom: 20 },
   inCallRow: { flexDirection: 'row', justifyContent: 'space-around', width: '100%', marginBottom: 20 },
   inCallButton: { alignItems: 'center', width: 80 },
   inCallIconContainer: { backgroundColor: 'rgba(255, 255, 255, 0.2)', width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center' },
   inCallButtonActive: { backgroundColor: '#007bff' },
   inCallButtonText: { color: 'white', marginTop: 8 },
+  
   keypadContainer: { width: '100%', alignItems: 'center' },
   keypadGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', width: 300 },
-  keypadButton: { width: 80, height: 80, borderRadius: 40, margin: 10, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.2)' },
-  keypadButtonText: { color: 'white', fontSize: 32 },
-  keypadHideText: { color: 'white', fontSize: 18, marginTop: 20 },
-  keypadDisplay: { color: 'white', fontSize: 24, height: 30, marginTop: 10 },
+  keypadButton: { width: 75, height: 75, borderRadius: 37.5, margin: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255, 255, 255, 0.2)' },
+  keypadButtonText: { color: 'white', fontSize: 30 },
+  keypadHideText: { color: 'white', fontSize: 16, marginTop: 10, marginBottom: 10 },
+  
+  keypadDisplay: { 
+    color: 'white', 
+    fontSize: 32, 
+    height: 40, 
+    marginBottom: 40, // UPDATED: Increased from 20 to 40
+    fontWeight: 'bold', 
+    textAlign: 'center', 
+    width: '100%' 
+  },
 });

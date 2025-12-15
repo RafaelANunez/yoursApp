@@ -15,7 +15,6 @@ export const ContactFormModal = ({ visible, onClose, onSave, initialData }) => {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [relationship, setRelationship] = useState('');
-  // NEW: Field to link the contact's App User ID
   const [linkedAppUserId, setLinkedAppUserId] = useState('');
 
   useEffect(() => {
@@ -32,16 +31,22 @@ export const ContactFormModal = ({ visible, onClose, onSave, initialData }) => {
     }
   }, [initialData, visible]);
 
+  // --- NEW: SCRIPT PROTECTION FUNCTION ---
+  // This removes <, >, and " characters to prevent code injection
+  const sanitizeInput = (text) => {
+    return text.replace(/[<>"']/g, '');
+  };
+
   const handleSave = () => {
     if (!name.trim() || !phone.trim()) {
       alert('Please enter a name and phone number');
       return;
     }
     onSave({ 
-      name, 
-      phone, 
-      relationship, 
-      linkedAppUserId: linkedAppUserId.trim() // Save the ID
+      name: name.trim(), 
+      phone: phone.trim(), 
+      relationship: relationship.trim(), 
+      linkedAppUserId: linkedAppUserId.trim()
     });
     onClose();
   };
@@ -68,12 +73,20 @@ export const ContactFormModal = ({ visible, onClose, onSave, initialData }) => {
           </View>
 
           <ScrollView style={styles.form}>
+            {/* --- PROTECTION NOTICE --- */}
+            <View style={styles.securityNotice}>
+              <Text style={styles.securityText}>
+                🛡️ Input is monitored for special characters to prevent script injection.
+              </Text>
+            </View>
+
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Name</Text>
               <TextInput
                 style={styles.input}
                 value={name}
-                onChangeText={setName}
+                // Apply protection here
+                onChangeText={(text) => setName(sanitizeInput(text))}
                 placeholder="e.g., Mom"
                 placeholderTextColor="#9CA3AF"
               />
@@ -84,7 +97,8 @@ export const ContactFormModal = ({ visible, onClose, onSave, initialData }) => {
               <TextInput
                 style={styles.input}
                 value={phone}
-                onChangeText={setPhone}
+                // Apply protection here
+                onChangeText={(text) => setPhone(sanitizeInput(text))}
                 placeholder="e.g., +1234567890"
                 keyboardType="phone-pad"
                 placeholderTextColor="#9CA3AF"
@@ -96,22 +110,23 @@ export const ContactFormModal = ({ visible, onClose, onSave, initialData }) => {
               <TextInput
                 style={styles.input}
                 value={relationship}
-                onChangeText={setRelationship}
+                // Apply protection here
+                onChangeText={(text) => setRelationship(sanitizeInput(text))}
                 placeholder="e.g., Mother"
                 placeholderTextColor="#9CA3AF"
               />
             </View>
 
-            {/* NEW SECTION: Link User ID */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>App Link (Optional)</Text>
               <Text style={styles.helperText}>
-                Enter their User ID found in their Profile Settings to enable automatic push alerts.
+                Enter their User ID to enable push alerts.
               </Text>
               <TextInput
                 style={styles.input}
                 value={linkedAppUserId}
-                onChangeText={setLinkedAppUserId}
+                // Apply protection here
+                onChangeText={(text) => setLinkedAppUserId(sanitizeInput(text))}
                 placeholder="e.g., user_123xyz..."
                 placeholderTextColor="#9CA3AF"
                 autoCapitalize="none"
@@ -140,6 +155,7 @@ export const ContactFormModal = ({ visible, onClose, onSave, initialData }) => {
 };
 
 const styles = StyleSheet.create({
+  // ... existing styles ...
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -171,6 +187,21 @@ const styles = StyleSheet.create({
   form: {
     flex: 1,
   },
+  // --- NEW STYLES FOR PROTECTION TEXT ---
+  securityNotice: {
+    backgroundColor: '#ECFDF5', // Light green background
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  securityText: {
+    color: '#065F46',
+    fontSize: 12,
+    textAlign: 'center',
+  },
+  // -------------------------------------
   inputGroup: {
     marginBottom: 20,
   },

@@ -7,7 +7,8 @@ import {
   signOut,
   onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithCredential
+  signInWithCredential,
+  sendPasswordResetEmail // <--- NEW IMPORT
 } from 'firebase/auth';
 import { ref, set, get, child } from 'firebase/database'; // Import Database functions
 import { GoogleSignin } from '@react-native-google-signin/google-signin'; // Import Google Signin
@@ -232,6 +233,16 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // --- NEW: Reset Password Function ---
+  const resetPassword = async (email) => {
+    try {
+      await sendPasswordResetEmail(auth, email);
+    } catch (error) {
+      console.error('Reset password error:', error);
+      throw error;
+    }
+  };
+
   const value = {
     user,
     isLoggedIn,
@@ -240,7 +251,8 @@ export const AuthProvider = ({ children }) => {
     signup,
     logout,
     updateUser,
-    googleLogin, // Expose the new function
+    googleLogin,
+    resetPassword, // <--- EXPOSED HERE
   };
 
   return (
